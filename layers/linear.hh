@@ -6,8 +6,8 @@
 class Linear : public Layer{
     const float weights_init_threshold = 0.01;
 
-    Matrix W; // (num_input, num_output)
-    Matrix b; // (num_output, batch_size)
+    Matrix W; // (num_input, num_output)  W_T (num_output, num_input)
+    Matrix b; // (1, batch_size)
 
     Matrix Y; // (num_output, batch_size)
     Matrix X; // (num_input, batch_size)
