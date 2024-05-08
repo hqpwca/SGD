@@ -10,6 +10,8 @@ ReLU::ReLU() { this->type = TReLU; }
 
 ReLU::~ReLU() { }
 
+//TODO: Do multiple calcualtion in each kernel.
+
 __global__ void reluKernel(float* Y, int n) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < n) {

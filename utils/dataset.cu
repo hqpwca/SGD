@@ -72,6 +72,7 @@ bool Dataset::nextBatch() {
 
     for (int i = 0; i < batch_size; ++i) {
         int idx = ind[cur_bnum * batch_size + i];
+        
         // TODO: change memcpy to setup of pointers.
         memcpy(&input[i*input.shape.x], inputs[idx], sizeof(float) * input.shape.x);
         memcpy(&output[i*output.shape.x], outputs[idx], sizeof(float) * output.shape.x);

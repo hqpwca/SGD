@@ -11,6 +11,8 @@ Sigmoid::Sigmoid() { this->type = TSigmoid; }
 
 Sigmoid::~Sigmoid() { }
 
+//TODO: Do multiple calcualtion in each kernel.
+
 __global__ void sigmoidKernel(float* Y, int n) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < n) {
