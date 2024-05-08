@@ -7,6 +7,10 @@
 #include "sigmoid.hh"
 #include "../utils/exception.hh"
 
+Sigmoid::Sigmoid() { this->type = TSigmoid; }
+
+Sigmoid::~Sigmoid() { }
+
 __global__ void sigmoidKernel(float* Y, int n) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < n) {
@@ -40,7 +44,7 @@ Matrix& Sigmoid::forward(cublasHandle_t &cublasH, Matrix &x) {
     return Y;
 }
 
-Matrix& Sigmoid::back_prop(cublasHandle_t &cublasH, Matrix &od) {
+Matrix& Sigmoid::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) {
     d.allocateMemoryIfNotAllocated(od.shape);
 
     int num_elements = X.shape.x * X.shape.y;

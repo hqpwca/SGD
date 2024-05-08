@@ -16,9 +16,7 @@
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
 
-#include "./layers/linear.hh"
-#include "./layers/relu.hh"
-#include "./layers/sigmoid.hh"
+
 
 cublasHandle_t handle;
 
@@ -26,25 +24,33 @@ void data_generation() {
     
 }
 
-int main() {
-    float lr = 0.1;
-
-    Linear L1 = Linear(Shape(16, 32));
-    ReLU R1 = ReLU();
-    Linear L2 = Linear(Shape(32, 16));
-    ReLU R2 = ReLU();
-    Linear L3 = Linear(Shape(16, 1));
-
+void init_network() {
     if (cublasCreate(&handle)) {
         std::cerr << "Create cublas handle error." << std::endl;
         exit(EXIT_FAILURE);
     };
+}
 
+void cleanup() {
+    cublasDestroy(handle);
+}
+
+void train(float lr = 0.1) {
+
+}
+
+float test() {
+
+}
+
+int main() {
     data_generation();
 
+    init_network();
 
+    train();
 
-    cublasDestroy(handle);
+    cleanup();
 
     return 0;
 }
