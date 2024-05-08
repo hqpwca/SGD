@@ -24,6 +24,9 @@ public:
 	void allocateMemory();
 	void allocateMemoryIfNotAllocated(Shape shape);
 
+	void setCudaMemory(float *ptr);
+	void setHostMemory(float *ptr);
+
 	void copyHostToDevice();
 	void copyDeviceToHost();
 

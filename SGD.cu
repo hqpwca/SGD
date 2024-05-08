@@ -16,19 +16,27 @@
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
 
-
+#include "network.hh"
 
 cublasHandle_t handle;
 
-void data_generation() {
+Matrix calcLoss(Matrix &batch_output, Matrix &network_output)
+{
     
 }
 
-void init_network() {
+void init_network(Network &N) {
     if (cublasCreate(&handle)) {
         std::cerr << "Create cublas handle error." << std::endl;
         exit(EXIT_FAILURE);
     };
+
+    N.addLayer(new Linear(Shape(16, 32)));
+    N.addLayer(new ReLU());
+    N.addLayer(new Linear(Shape(32, 16)));
+    N.addLayer(new ReLU());
+    N.addLayer(new Linear(Shape(16, 1)));
+    N.addLayer(new Sigmoid());
 }
 
 void cleanup() {
@@ -44,9 +52,9 @@ float test() {
 }
 
 int main() {
-    data_generation();
 
-    init_network();
+    Network N;
+    init_network(N);
 
     train();
 

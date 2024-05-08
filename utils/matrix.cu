@@ -29,6 +29,22 @@ void Matrix::allocateHostMemory() {
 	}
 }
 
+void Matrix::setCudaMemory(float *ptr) {
+	if (!device_allocated) {
+		data_device = std::shared_ptr<float>(ptr,
+							[&](float* _){ });
+		device_allocated = true;
+	}
+}
+
+void Matrix::setHostMemory(float *ptr) {
+	if (!host_allocated) {
+		data_host = std::shared_ptr<float>(ptr,
+							[&](float* _){ });
+		host_allocated = true;
+	}
+}
+
 void Matrix::allocateMemory() {
 	allocateCudaMemory();
 	allocateHostMemory();

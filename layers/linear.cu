@@ -6,7 +6,7 @@
 #include "linear.hh"
 #include "../utils/exception.hh"
 
-Linear::Linear(Shape shape) : W(shape), b(shape.y, 1) { //Input, Output
+Linear::Linear(Shape shape) : W(shape), b(shape.y, 1) { //Input, Output (columns, rows);
     this->type = TLinear;
     
     b.allocateMemory();
@@ -41,7 +41,7 @@ Matrix& Linear::forward(cublasHandle_t &cublasH, Matrix &x) { // x: (num_input, 
     assert(x.shape.x == W.shape.x);
 
     Shape Y_shape(W.shape.y, x.shape.y);
-    Y.allocateMemoryIfNotAllocated(Y_shape);
+    Y.allocateMemoryIfNotAllocated(Y_shape); // Y: (num_output, batch_size)  Y = X 
     this->X = x;
 
     const float alpha = 1.0, beta = 0.0;
