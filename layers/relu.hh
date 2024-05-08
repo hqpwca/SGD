@@ -3,9 +3,9 @@
 #include "../utils/matrix.hh"
 
 class ReLU {
-    Matrix Y; // (num_output, batch_size)
-    Matrix X; // (num_input, batch_size)
-    Matrix d; // (num_input, batch_size)
+    Matrix Y; // (_, batch_size)
+    Matrix X; // (_, batch_size)
+    Matrix d; // (_, batch_size)
 public:
     ReLU();
     ~ReLU();

@@ -2,29 +2,26 @@
 #include <assert.h>
 #include <iostream>
 #include <random>
+#include <cmath>
 
-#include "relu.hh"
+#include "sigmoid.hh"
 #include "../utils/exception.hh"
 
-ReLU::ReLU() { }
-
-ReLU::~ReLU() { }
-
-__global__ void reluKernel(float* Y, int n) {
+__global__ void sigmoidKernel(float* Y, int n) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < n) {
-        Y[index] = fmaxf(0.0f, Y[index]);
+        Y[index] = 1.0f / (1.0f + expf(-Y[index]));
     }
 }
 
-__global__ void reluBackpropKernel(const float* Y, float* dX, int n) {
+__global__ void sigmoidBackpropKernel(const float* Y, float* dX, int n) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < n) {
-        dX[index] = Y[index] > 0 ? dX[index] : 0.0f;
+        dX[index] = dX[index] * Y[index] * (1.0f - Y[index]);
     }
 }
 
-Matrix& ReLU::forward(cublasHandle_t &cublasH, Matrix &x) { //(_, batch_size)
+Matrix& Sigmoid::forward(cublasHandle_t &cublasH, Matrix &x) {
     this->X = x;
     Y.allocateMemoryIfNotAllocated(x.shape);
 
@@ -35,15 +32,15 @@ Matrix& ReLU::forward(cublasHandle_t &cublasH, Matrix &x) { //(_, batch_size)
 
     cudaMemcpy(Y.data_device.get(), x.data_device.get(), num_elements * sizeof(float), cudaMemcpyDeviceToDevice);
 
-    reluKernel<<<numBlocks, blockSize>>>(Y.data_device.get(), num_elements);
+    sigmoidKernel<<<numBlocks, blockSize>>>(Y.data_device.get(), num_elements);
     cudaDeviceSynchronize();
 
-    NNException::throwIfDeviceErrorsOccurred("Cannot perform ReLU forward propagation.");
+    NNException::throwIfDeviceErrorsOccurred("Cannot perform Sigmoid forward propagation.");
 
     return Y;
 }
 
-Matrix& ReLU::back_prop(cublasHandle_t &cublasH, Matrix &od) { //(_, batch_size)
+Matrix& Sigmoid::back_prop(cublasHandle_t &cublasH, Matrix &od) {
     d.allocateMemoryIfNotAllocated(od.shape);
 
     int num_elements = X.shape.x * X.shape.y;
@@ -53,10 +50,10 @@ Matrix& ReLU::back_prop(cublasHandle_t &cublasH, Matrix &od) { //(_, batch_size)
 
     cudaMemcpy(d.data_device.get(), od.data_device.get(), num_elements * sizeof(float), cudaMemcpyDeviceToDevice);
 
-    reluBackpropKernel<<<numBlocks, blockSize>>>(X.data_device.get(), d.data_device.get(), num_elements);
+    sigmoidBackpropKernel<<<numBlocks, blockSize>>>(Y.data_device.get(), d.data_device.get(), num_elements);
     cudaDeviceSynchronize();
 
-    NNException::throwIfDeviceErrorsOccurred("Cannot perform ReLU back propagation");
+    NNException::throwIfDeviceErrorsOccurred("Cannot perform Sigmoid back propagation");
 
     return d;
 }

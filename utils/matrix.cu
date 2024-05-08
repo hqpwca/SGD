@@ -1,5 +1,5 @@
 #include "matrix.hh"
-#include "nn_exception.hh"
+#include "exception.hh"
 
 Matrix::Matrix(size_t x_dim, size_t y_dim) :
 	shape(x_dim, y_dim), data_device(nullptr), data_host(nullptr),

@@ -1,0 +1,52 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/home/kechen/SGD/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPathInCppPropertiesJson": "/usr/bin/gcc",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "/home/kechen/SGD/**",
+                    "/usr/local/cuda-12.3/lib64",
+                    "/usr/local/cuda-12.3/bin",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        },
+        {
+            "name": "NVCC",
+            "includePath": [
+                "/home/kechen/SGD/**",
+                "/usr/local/cuda-12.3/lib64",
+                "/usr/local/cuda-12.3/bin"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/local/cuda-12.3/bin/nvcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPathInCppPropertiesJson": "/usr/bin/gcc",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "/home/kechen/SGD/**",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerArgs": [
+                "-lcublas"
+            ]
+        }
+    ],
+    "version": 4
+}
