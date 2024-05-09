@@ -19,15 +19,18 @@
 #include "network.hh"
 #include "utils/dataset.hh"
 
+#define BATCH_SIZE 256
+
 cublasHandle_t handle;
 std::vector<float> T;
-Dataset *train, *test;
+Dataset *train, *val, *test;
 
 Matrix calcSquareLoss(Matrix &batch_output, Matrix &network_output) // (1, batch_size)
 {
     assert(batch_output.shape.x == network_output.shape.x && batch_output.shape.y == network_output.shape.y);
 
     Matrix m(batch_output.shape);
+    m.allocateMemory();
     for (int i = 0; i < batch_output.shape.x * batch_output.shape.y; ++ i) {
         m[i] =  std::pow((network_output[i] - batch_output[i]), 2.0);
     }
@@ -48,12 +51,13 @@ void init_network(Network &N) {
         exit(EXIT_FAILURE);
     };
 
+    N.addLayer(new Linear(Shape(16, 16)));
+    N.addLayer(new ReLU());
     N.addLayer(new Linear(Shape(16, 32)));
     N.addLayer(new ReLU());
     N.addLayer(new Linear(Shape(32, 16)));
-    N.addLayer(new ReLU());
-    N.addLayer(new Linear(Shape(16, 1)));
     N.addLayer(new Sigmoid());
+    N.addLayer(new Linear(Shape(16, 1)));
 }
 
 void cleanup() {
@@ -62,16 +66,16 @@ void cleanup() {
     delete test;
 }
 
-void train_SGD(Network N, Dataset *d, float lr = 0.1, int epoches = 100) {
+void train_SGD(Network &N, Dataset *train, Dataset *val, float lr = 0.1, int epoches = 100, int batch_size = BATCH_SIZE) {
     for (int epoch = 0; epoch < epoches; ++epoch) {
-        d->nextEpoch();
+        train->nextEpoch();
 
         int num_batches = -1;
         float sumloss = 0.0;
-        while(d->nextBatch()) {
+        while(train->nextBatch()) {
             ++ num_batches;
-            Matrix input = d->getBatchInput();
-            Matrix output = d->getBatchOutput();
+            Matrix input = train->getBatchInput();
+            Matrix output = train->getBatchOutput();
 
             //Forward
             Matrix net_output = N.forward(handle, input);
@@ -83,24 +87,70 @@ void train_SGD(Network N, Dataset *d, float lr = 0.1, int epoches = 100) {
             loss.copyHostToDevice();
 
             //Back prop
-            N.back_prop(handle, loss, lr);
+            N.back_prop(handle, loss, lr*10/(10+epoch)); //Dynamic Learning Rate
         }
-        std::cerr << "Finished Epoch #" << epoch << " Loss: " << sumloss / num_batches / 32 << std::endl;
+
+        std::cerr << "Finished Epoch #" << epoch+1 << " Train Loss: " << sumloss / num_batches / batch_size;
+
+        //Validate
+        val->nextEpoch();
+
+        num_batches = -1;
+        float sumval = 0.0;
+        while(val->nextBatch()) {
+            ++ num_batches;
+            Matrix input = val->getBatchInput();
+            Matrix output = val->getBatchOutput();
+
+            //Forward
+            Matrix net_output = N.forward(handle, input);
+            net_output.copyDeviceToHost();
+
+            //Calc loss
+            Matrix loss = calcSquareLoss(output, net_output);
+            sumval += sumLoss(loss);
+        }
+        std::cerr << " Valid Loss: " << sumval / num_batches / batch_size << std::endl;
     }
 }
 
-float test_SGD(Network N, Dataset *d) {
+void validate_SGD(Network &N, Dataset *d) {
 
+}
+
+void test_SGD(Network &N, Dataset *d) {
+    d->nextEpoch();
+
+    int num_batches = -1;
+    float sumloss = 0.0;
+    while(d->nextBatch()) {
+        ++ num_batches;
+        Matrix input = d->getBatchInput();
+        Matrix output = d->getBatchOutput();
+
+        //Forward
+        Matrix net_output = N.forward(handle, input);
+        net_output.copyDeviceToHost();
+
+        //Calc loss
+        Matrix loss = calcSquareLoss(output, net_output);
+        sumloss += sumLoss(loss);
+    }
+
+    std::cerr << "Finished Epoch #" << "Test" << " Loss: " << sumloss / num_batches / BATCH_SIZE << std::endl;
 }
 
 int main(int argc, char *argv[]) {
     Network N;
     init_network(N);
 
-    train = new Dataset(T, 16, 1, 32, 2048);
-    test = new Dataset(T, 16, 1, 32, 512);
+    train = new Dataset(T, 16, 1, BATCH_SIZE, 4096);
+    val = new Dataset(T, 16, 1, BATCH_SIZE, 512);
+    test = new Dataset(T, 16, 1, BATCH_SIZE, 512);
 
-    train_SGD(N, train);
+    train_SGD(N, train, val, 0.05);
+
+    test_SGD(N, test);
 
     cleanup();
 

@@ -25,8 +25,6 @@ Dataset::Dataset(std::vector<float> &T, int num_input, int num_output, int batch
             T.push_back(rand_t(generator));
     }
 
-    std::cerr << num_input << std::endl;
-
     for(int i = 0; i < num_data; ++i) {
         float *X = new float[num_input];
         float *Y = new float[num_output];
@@ -37,8 +35,9 @@ Dataset::Dataset(std::vector<float> &T, int num_input, int num_output, int batch
             X[idx] = rand_x(generator);
             sumX += X[idx];
             
-            Y[idx] += std::pow(sumX/(idx+1), T[idx]);
+            Y[0] += std::pow(sumX/(idx+1), T[idx]);
         }
+        Y[0] /= num_input;
 
         inputs.push_back(X);
         outputs.push_back(Y);

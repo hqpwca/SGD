@@ -3,10 +3,7 @@ enable_language(CUDA)
 
 project(SGD LANGUAGES CXX CUDA)
 
-# Pass options to NVCC
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}")
-
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+SET(BUILD_MODE Debug)
 
 # Specify include directories
 add_library(network STATIC
@@ -35,8 +32,12 @@ target_compile_features(network PUBLIC cxx_std_14)
 set_target_properties( network
                         PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+target_compile_options(network PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
+
 add_executable(SGD SGD.cu)
 
 set_property(TARGET SGD 
             PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+
+target_compile_options(SGD PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
 target_link_libraries(SGD PRIVATE network -lcublas)
