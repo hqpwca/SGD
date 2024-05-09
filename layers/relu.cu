@@ -45,7 +45,7 @@ Matrix& ReLU::forward(cublasHandle_t &cublasH, Matrix &x) { //(_, batch_size)
     return Y;
 }
 
-Matrix& ReLU::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) { //(_, batch_size)
+Matrix& ReLU::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr) { //(_, batch_size)
     d.allocateMemoryIfNotAllocated(od.shape);
 
     int num_elements = X.shape.x * X.shape.y;

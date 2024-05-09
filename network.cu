@@ -25,7 +25,7 @@ Matrix& Network::forward(cublasHandle_t &cublasH, Matrix &x) {
 	return output;
 }
 
-void Network::back_prop(cublasHandle_t &cublasH, Matrix &loss, float lr = 0.1) {
+void Network::back_prop(cublasHandle_t &cublasH, Matrix &loss, float lr) {
     for (auto it = this->layers.rbegin(); it != this->layers.rend(); it++) {
 		loss = (*it)->back_prop(cublasH, loss, lr);
 	}

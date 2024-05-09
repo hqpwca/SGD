@@ -17,12 +17,29 @@
 #include "cublas_v2.h"
 
 #include "network.hh"
+#include "utils/dataset.hh"
 
 cublasHandle_t handle;
+std::vector<float> T;
+Dataset *train, *test;
 
-Matrix calcLoss(Matrix &batch_output, Matrix &network_output)
+Matrix calcSquareLoss(Matrix &batch_output, Matrix &network_output) // (1, batch_size)
 {
-    
+    assert(batch_output.shape.x == network_output.shape.x && batch_output.shape.y == network_output.shape.y);
+
+    Matrix m(batch_output.shape);
+    for (int i = 0; i < batch_output.shape.x * batch_output.shape.y; ++ i) {
+        m[i] =  std::pow((network_output[i] - batch_output[i]), 2.0);
+    }
+    return m;
+}
+
+float sumLoss(Matrix &m) {
+    float sum = 0.0;
+    for (int i = 0; i < m.shape.x * m.shape.y; ++ i) {
+        sum += m[i];
+    }
+    return sum;
 }
 
 void init_network(Network &N) {
@@ -41,22 +58,49 @@ void init_network(Network &N) {
 
 void cleanup() {
     cublasDestroy(handle);
+    delete train;
+    delete test;
 }
 
-void train(float lr = 0.1) {
+void train_SGD(Network N, Dataset *d, float lr = 0.1, int epoches = 100) {
+    for (int epoch = 0; epoch < epoches; ++epoch) {
+        d->nextEpoch();
+
+        int num_batches = -1;
+        float sumloss = 0.0;
+        while(d->nextBatch()) {
+            ++ num_batches;
+            Matrix input = d->getBatchInput();
+            Matrix output = d->getBatchOutput();
+
+            //Forward
+            Matrix net_output = N.forward(handle, input);
+            net_output.copyDeviceToHost();
+
+            //Calc loss
+            Matrix loss = calcSquareLoss(output, net_output);
+            sumloss += sumLoss(loss);
+            loss.copyHostToDevice();
+
+            //Back prop
+            N.back_prop(handle, loss, lr);
+        }
+        std::cerr << "Finished Epoch #" << epoch << " Loss: " << sumloss / num_batches / 32 << std::endl;
+    }
+}
+
+float test_SGD(Network N, Dataset *d) {
 
 }
 
-float test() {
-
-}
-
-int main() {
-
+int main(int argc, char *argv[]) {
     Network N;
     init_network(N);
 
-    train();
+    train = new Dataset(T, 16, 1, 32, 2048);
+    test = new Dataset(T, 16, 1, 32, 512);
+
+    train_SGD(N, train);
 
     cleanup();
 

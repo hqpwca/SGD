@@ -8,7 +8,7 @@
 
 // Target function: Y = F(X) = (x1^t1 + ((x1+x2)/2)^t2 + ... + ((x1+...+x16)/16)^t16)/16 (t_i \in [0.5, 2]) (x_i \in [0.1, 1])
 
-Dataset::Dataset(std::vector<float> &T, int num_input = 16, int num_output = 1, int batch_size = 32, int num_data = 2048, select_mode mode = RandomPermute)
+Dataset::Dataset(std::vector<float> &T, int num_input, int num_output, int batch_size, int num_data, select_mode mode)
     : T(T), input(num_input, batch_size), output(num_output, batch_size), batch_size(batch_size), num_data(num_data), mode(mode)
 {
     cur_epoch = -1;
@@ -24,6 +24,8 @@ Dataset::Dataset(std::vector<float> &T, int num_input = 16, int num_output = 1, 
         for(int i = 0; i < num_input; ++i)
             T.push_back(rand_t(generator));
     }
+
+    std::cerr << num_input << std::endl;
 
     for(int i = 0; i < num_data; ++i) {
         float *X = new float[num_input];
@@ -57,12 +59,14 @@ Dataset::~Dataset() {
 Matrix Dataset::getBatchInput() {
     assert(cur_epoch >= 0 && cur_bnum >= 0);
 
+    input.copyHostToDevice();
     return input;
 }
 
 Matrix Dataset::getBatchOutput() {
     assert(cur_epoch >= 0 && cur_bnum >= 0);
 
+    output.copyHostToDevice();
     return output;
 }
 
@@ -76,8 +80,6 @@ bool Dataset::nextBatch() {
         // TODO: change memcpy to setup of pointers.
         memcpy(&input[i*input.shape.x], inputs[idx], sizeof(float) * input.shape.x);
         memcpy(&output[i*output.shape.x], outputs[idx], sizeof(float) * output.shape.x);
-        input.copyHostToDevice();
-        output.copyHostToDevice();
     }
 
     return true;

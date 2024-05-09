@@ -43,30 +43,30 @@ Matrix& Linear::forward(cublasHandle_t &cublasH, Matrix &x) { // x: (num_input, 
 
     const float alpha = 1.0, beta = 0.0;
 
-    CUBLAS_CHECK( \
-        cublasSgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_T, \
-                    x.shape.y, W.shape.y, W.shape.x, &alpha, \
-                    x.data_device.get(), x.shape.y, \ 
-                    W.data_device.get(), W.shape.y, \
-                    &beta, Y.data_device.get(), Y.shape.y) \
+    CUBLAS_CHECK(
+        cublasSgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_T,
+                    x.shape.y, W.shape.y, W.shape.x, &alpha,
+                    x.data_device.get(), x.shape.y,
+                    W.data_device.get(), W.shape.y,
+                    &beta, Y.data_device.get(), Y.shape.y)
                 );
 
     const float alpha_add = 1.0, beta_add = 1.0;
 
     for (int i = 0; i < x.shape.y; ++i) {
         CUBLAS_CHECK(
-            cublasSgeam(cublasH, CUBLAS_OP_T, CUBLAS_OP_N, \
-                        1, Y.shape.x, &alpha_add, \
-                        b.data_device.get(), Y.shape.x, &beta_add, \
-                        Y.data_device.get() + i * W.shape.y, 1, \
-                        Y.data_device.get() + i * W.shape.y, 1) \
+            cublasSgeam(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
+                        1, Y.shape.x, &alpha_add,
+                        b.data_device.get(), Y.shape.x, &beta_add,
+                        Y.data_device.get() + i * W.shape.y, 1,
+                        Y.data_device.get() + i * W.shape.y, 1)
         );
     }
     
     return Y;
 }
 
-Matrix& Linear::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) { // od: (num_output, batch_size)
+Matrix& Linear::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr) { // od: (num_output, batch_size)
     assert(od.shape.x == W.shape.y);
 
     Shape d_shape(W.shape.x, od.shape.y); // d: (num_input, batch_size)  d = od * W
@@ -74,12 +74,12 @@ Matrix& Linear::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) 
 
     const float alpha = 1.0, beta = 0.0;
 
-    CUBLAS_CHECK( \
-        cublasSgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_N, \
-                    od.shape.y, W.shape.x, od.shape.x, &alpha, \
-                    od.data_device.get(), od.shape.y, \ 
-                    W.data_device.get(), W.shape.y, &beta, \
-                    d.data_device.get(), d.shape.y) \
+    CUBLAS_CHECK( 
+        cublasSgemm(cublasH, CUBLAS_OP_N, CUBLAS_OP_N,
+                    od.shape.y, W.shape.x, od.shape.x, &alpha,
+                    od.data_device.get(), od.shape.y, 
+                    W.data_device.get(), W.shape.y, &beta,
+                    d.data_device.get(), d.shape.y)
                 );
 
     updateWeights(cublasH, od, lr);
@@ -88,20 +88,20 @@ Matrix& Linear::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) 
     return d;
 }
 
-void Linear::updateWeights(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) {  // od: (num_output, batch_size)
+void Linear::updateWeights(cublasHandle_t &cublasH, Matrix &od, float lr) {  // od: (num_output, batch_size)
     const float alpha = lr / od.shape.y, beta = 1.0;
 
     // W = W - lr * (od_T * X) / bs
-    CUBLAS_CHECK( \
-        cublasSgemm(cublasH, CUBLAS_OP_T, CUBLAS_OP_N, \
-                    W.shape.x, W.shape.y, X.shape.y, &alpha, \
-                    od.data_device.get(), od.shape.y, \ 
-                    X.data_device.get(), X.shape.y, &beta, \
-                    W.data_device.get(), W.shape.x) \
+    CUBLAS_CHECK( 
+        cublasSgemm(cublasH, CUBLAS_OP_T, CUBLAS_OP_N,
+                    W.shape.x, W.shape.y, X.shape.y, &alpha,
+                    od.data_device.get(), od.shape.y, 
+                    X.data_device.get(), X.shape.y, &beta,
+                    W.data_device.get(), W.shape.x)
                 );
 }
 
-void Linear::updateBias(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) {  // od: (num_output, batch_size)
+void Linear::updateBias(cublasHandle_t &cublasH, Matrix &od, float lr) {  // od: (num_output, batch_size)
     int blockSize = 32;
     int numBlocks = (od.shape.y + blockSize - 1) / blockSize;
 

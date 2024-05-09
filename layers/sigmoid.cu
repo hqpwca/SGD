@@ -46,7 +46,7 @@ Matrix& Sigmoid::forward(cublasHandle_t &cublasH, Matrix &x) {
     return Y;
 }
 
-Matrix& Sigmoid::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr = 0.01) {
+Matrix& Sigmoid::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr) {
     d.allocateMemoryIfNotAllocated(od.shape);
 
     int num_elements = X.shape.x * X.shape.y;
