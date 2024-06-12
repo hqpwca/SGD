@@ -60,6 +60,7 @@ void Matrix::allocateMemoryIfNotAllocated(Shape shape) {
 void Matrix::copyHostToDevice() {
 	if (device_allocated && host_allocated) {
 		cudaMemcpy(data_device.get(), data_host.get(), shape.x * shape.y * sizeof(float), cudaMemcpyHostToDevice);
+		//std::cout << cudaGetLastError() << std::endl;
 		NNException::throwIfDeviceErrorsOccurred("Cannot copy host data to CUDA device.");
 	}
 	else {
@@ -70,6 +71,7 @@ void Matrix::copyHostToDevice() {
 void Matrix::copyDeviceToHost() {
 	if (device_allocated && host_allocated) {
 		cudaMemcpy(data_host.get(), data_device.get(), shape.x * shape.y * sizeof(float), cudaMemcpyDeviceToHost);
+		//std::cout << cudaGetLastError() << std::endl;
 		NNException::throwIfDeviceErrorsOccurred("Cannot copy device data to host.");
 	}
 	else {
@@ -77,10 +79,18 @@ void Matrix::copyDeviceToHost() {
 	}
 }
 
-float& Matrix::operator[](const int index) {
-	return data_host.get()[index];
+float* Matrix::operator[](const int index) {
+	return &data_host.get()[index];
 }
 
-const float& Matrix::operator[](const int index) const {
-	return data_host.get()[index];
+const float* Matrix::operator[](const int index) const {
+	return &data_host.get()[index];
+}
+
+float* Matrix::operator()(const int index) {
+	return &data_device.get()[index];
+}
+
+const float* Matrix::operator()(const int index) const {
+	return &data_device.get()[index];
 }

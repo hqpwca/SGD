@@ -17,6 +17,7 @@
 #include "cublas_v2.h"
 
 #include "network.hh"
+#include "layers/SF_projector.hh"
 #include "utils/dataset.hh"
 
 #define BATCH_SIZE 256
@@ -32,7 +33,7 @@ Matrix calcSquareLoss(Matrix &batch_output, Matrix &network_output) // (1, batch
     Matrix m(batch_output.shape);
     m.allocateMemory();
     for (int i = 0; i < batch_output.shape.x * batch_output.shape.y; ++ i) {
-        m[i] =  std::pow((network_output[i] - batch_output[i]), 2.0);
+        *m[i] =  std::pow((network_output[i] - batch_output[i]), 2.0);
     }
     return m;
 }
@@ -40,7 +41,7 @@ Matrix calcSquareLoss(Matrix &batch_output, Matrix &network_output) // (1, batch
 float sumLoss(Matrix &m) {
     float sum = 0.0;
     for (int i = 0; i < m.shape.x * m.shape.y; ++ i) {
-        sum += m[i];
+        sum += *m[i];
     }
     return sum;
 }
@@ -140,6 +141,7 @@ void test_SGD(Network &N, Dataset *d) {
     std::cerr << "Finished Epoch #" << "Test" << " Loss: " << sumloss / num_batches / BATCH_SIZE << std::endl;
 }
 
+/*
 int main(int argc, char *argv[]) {
     Network N;
     init_network(N);
@@ -154,5 +156,46 @@ int main(int argc, char *argv[]) {
 
     cleanup();
 
+    return 0;
+}
+*/
+
+int main() {
+    GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
+    geo->geo_init_example(800, 600, 0.0f, 255.0*PI/128.0);
+    geo->initialize_projection_matrix();
+
+    SF *sf_layer = new SF(geo);
+
+    Matrix x(256*256*256, 1);
+    x.allocateMemory();
+
+    for(int i=0; i<256; ++i){ //z
+        for(int j=0; j<256; ++j){ //y
+            for(int k=0; k<256; ++k) { //x
+                int idx = i*256*256+j*256+k;
+                double di = i-128, dj = j-128, dk = k-128;
+                if(sqrt(di*di + dj*dj + dk*dk) < 100.0){
+                    *x[idx] = 1.0f;
+                }
+                else {
+                    *x[idx] = 0.0f;
+                }
+            }
+        }
+    }
+    x.copyHostToDevice();
+
+    Matrix y(256*510*525, 1);
+    y.allocateMemory();
+    std::fill(y[0], y[256*510*525-1], 0.0f);
+    y.copyHostToDevice();
+
+    sf_layer->project(x, y, 1.0);
+
+    cudaDeviceSynchronize();
+
+    y.copyDeviceToHost();
+    
     return 0;
 }

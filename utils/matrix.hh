@@ -9,9 +9,6 @@ private:
 	bool device_allocated;
 	bool host_allocated;
 
-	void allocateCudaMemory();
-	void allocateHostMemory();
-
 public:
 	Shape shape;
 
@@ -22,6 +19,8 @@ public:
 	Matrix(Shape shape);
 
 	void allocateMemory();
+	void allocateCudaMemory();
+	void allocateHostMemory();
 	void allocateMemoryIfNotAllocated(Shape shape);
 
 	void setCudaMemory(float *ptr);
@@ -30,6 +29,9 @@ public:
 	void copyHostToDevice();
 	void copyDeviceToHost();
 
-	float& operator[](const int index);
-	const float& operator[](const int index) const;
+	float* operator[](const int index);
+	const float* operator[](const int index) const;
+
+	float* operator()(const int index);
+	const float* operator()(const int index) const;
 };

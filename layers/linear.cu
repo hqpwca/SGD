@@ -11,7 +11,7 @@ Linear::Linear(Shape shape) : W(shape), b(1, shape.y) { //Input, Output (columns
     
     b.allocateMemory();
     for (int x = 0; x < b.shape.y; x++)
-        b[x] = 0;
+        *b[x] = 0;
     b.copyHostToDevice();
 
     W.allocateMemory();
@@ -19,7 +19,7 @@ Linear::Linear(Shape shape) : W(shape), b(1, shape.y) { //Input, Output (columns
     std::normal_distribution<float> normal_distribution(0.0, 1.0);
     for (int y = 0; y < W.shape.y; y++)
         for (int x = 0; x < W.shape.x; x++)
-            W[y * W.shape.x + x] = normal_distribution(generator) * weights_init_threshold;
+           *W[y * W.shape.x + x] = normal_distribution(generator) * weights_init_threshold;
     W.copyHostToDevice();
 }
 

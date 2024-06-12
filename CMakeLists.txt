@@ -16,12 +16,16 @@ add_library(network STATIC
     layers/sigmoid.cu
     layers/sigmoid.hh
     layers/layer.hh
+    layers/SF_projector.cu
+    layers/SF_projector.hh
     utils/dataset.cu
     utils/dataset.hh
     utils/matrix.cu
     utils/matrix.hh
     utils/shape.cu
     utils/shape.hh
+    utils/geo.cu
+    utils/geo.hh
     )
 
 target_compile_features(network PUBLIC cxx_std_14)
@@ -32,12 +36,12 @@ target_compile_features(network PUBLIC cxx_std_14)
 set_target_properties( network
                         PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(network PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
+target_compile_options(network PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-gencode arch=compute_86,code=sm_86>)
 
 add_executable(SGD SGD.cu)
 
 set_property(TARGET SGD 
             PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(SGD PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
+target_compile_options(SGD PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-gencode arch=compute_86,code=sm_86>)
 target_link_libraries(SGD PRIVATE network -lcublas)
