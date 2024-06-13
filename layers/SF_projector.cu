@@ -36,8 +36,76 @@ __device__ void sort4(float* a, float* b, float* c, float* d)
 
 }
 
+__device__ void sort2(double* a, double* b)
+{
+    if (*a > *b)
+    {
+        double tmp = *b;
+        *b = *a;
+        *a = tmp;
+    }
+}
+
+__device__ void sort4(double* a, double* b, double* c, double* d)
+{
+
+    sort2(a,b);
+    sort2(c,d);
+    sort2(a,c);
+    sort2(b,d);
+    sort2(b,c);
+
+    // sort3
+    // sort2(b, c);
+    // sort2(a, b);
+    // sort2(b, c);
+
+}
+
+__device__ void gamma_calculate(float s1, float s2, float *us, float *gamma) {
+    float tmp = 0.0f;
+    float b1, b2;
+
+    b1 = fmaxf(s1, us[0]);
+    b2 = fminf(s2, us[1]);
+
+    if(b2 > b1){
+        float _a = b1 - us[0];
+        float _b = b2 - b1;
+        tmp =  _b * _b + 2 * _a * _b / (2 * (us[1] - us[0]));
+    }
+    else {
+        tmp = 0.0f;
+    }
+    if(tmp == tmp) gamma[0] += tmp;
+
+    b1 = fmaxf(s1, us[1]);
+    b2 = fminf(s2, us[2]);
+
+    if(b2 > b1){
+        tmp = b2 - b1;
+    }
+    else{
+        tmp = 0.0f;
+    }
+    if(tmp == tmp) gamma[0] += tmp;
+
+    b1 = fmaxf(s1, us[2]);
+    b2 = fminf(s2, us[3]);
+
+    if(b2 > b1){
+        float _b = b2 - b1;
+        float _c = us[3] - b2;
+        tmp = _b * _b + 2 * _b * _c / (2 * (us[3] - us[2]));
+    }
+    else{
+        tmp = 0.0f;
+    }
+    if(tmp == tmp) gamma[0] += tmp;
+}
+
 // block_size: (8, 8, 64) ILP on z-axis.
-__global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, float rect_rect_factor, int z_size)
+__global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, double rect_rect_factor, int z_size)
 {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -123,64 +191,30 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
         max_u = ceilf(us[3] - 0.5f);
         
         if ( ( max_u < 0 ) || ( min_u >= nu ) ) continue;
-
-        C *= weight * rect_rect_factor;
         
-        C *= (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
+        C *= weight * rect_rect_factor * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
 
-        for (int i = min_u; i < max_u; ++i) {
+        for (int ti = 0; ti < max_u - min_u + 1; ++ti) {
+            int i = ti + min_u;
+
             s1 = i - 0.5f;
             s2 = i + 0.5f;
-            float gamma = 0.0f, tmp = 0.0f;
-            float b1, b2;
 
-            b1 = fmaxf(s1, us[0]);
-            b2 = fminf(s2, us[1]);
+            float gamma = 0.0f;
 
-            if(b2 > b1){
-                float a = b1 - us[0];
-                float b = b2 - b1;
-                tmp =  b * b + 2 * a * b / (2 * (us[1] - us[0]));
-            }
-            else {
-                tmp = 0.0f;
-            }
-            if(tmp == tmp) gamma += tmp;
+            gamma_calculate(s1, s2, us, &gamma);
 
-            b1 = fmaxf(s1, us[1]);
-            b2 = fminf(s2, us[2]);
-
-            if(b2 > b1){
-                tmp = b2 - b1;
-            }
-            else{
-                tmp = 0.0f;
-            }
-            if(tmp == tmp) gamma += tmp;
-
-            b1 = fmaxf(s1, us[2]);
-            b2 = fminf(s2, us[3]);
-
-            if(b2 > b1){
-                float b = b2 - b1;
-                float c = us[3] - b2;
-                tmp = b * b + 2 * b * c / (2 * (us[3] - us[2]));
-            }
-            else{
-                tmp = 0.0f;
-            }
-            if(tmp == tmp) gamma += tmp;
-
-            for (int j = min_v; j < max_v; ++j) {
+            for (int tj = 0; tj < max_v - min_v + 1; ++tj) {
+                int j = tj + min_v;
                 s1 = j + 0.5f;
                 s2 = j - 0.5f;
 
-                C *= gamma * fmaxf(fminf(s1,vs[1]) - fmaxf(s2,vs[0]),0);
+                float f2 = gamma * fmaxf(fminf(s1,vs[1]) - fmaxf(s2,vs[0]),0);
 
-                idxv = i * nu + j;
+                idxv = j * nu + i;
                 
-                if(idxv < nuv && idxv >= 0 && C == C) {
-                    atomicAdd(proj+idxv, C);
+                if(idxv < nuv && idxv >= 0 && f2 == f2) {
+                    atomicAdd(proj+idxv, f2);
                 }
             }
         }
@@ -188,9 +222,9 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
 }
 
 // block_size: (8, 8, 64) ILP on z-axis.
-__global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, float rect_rect_factor, int z_size)
+__global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, double3 d3xyz, const double *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size)
 {
-    int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
+        int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
     int oz = (blockIdx.z * blockDim.z) + threadIdx.z;
 
@@ -201,15 +235,15 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
     int nx,ny,nz;
     float min_u, max_u, min_v, max_v;
     float s1, s2;
-    float us[4] = {0.0};
-    float vs[2] = {0.0};
+    double us[4] = {0.0};
+    double vs[2] = {0.0};
     int idxv;
-    float C;
+    double C;
 
     nx = n3xyz.x, ny = n3xyz.y, nz = n3xyz.z;
     nx = nx/2; ny = ny/2; nz = nz/2;
 
-    float weight, signy1, signy2, signx1, signx2, signz1, signz2;
+    double weight, signy1, signy2, signx1, signx2, signz1, signz2;
     unsigned int nuv = nu*nv;
     size_t idx, idx0;
 
@@ -250,9 +284,12 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
         if ( min_v >= nv ) return;
 
         vs[1] = ( pmv2 + pm[6] *signz2 ) / ( pmv3 + pm[10]*signz2 );
-
+        
         max_v = ceilf(vs[1] - 0.5f);
         if ( max_v < 0 ) continue;
+
+        C = vol[idx];
+        if (C == 0) continue;
 
         weight = rsqrtf( (d3xyz.x*(ix - nx)-src.x)*(d3xyz.x*(ix - nx)-src.x) + (d3xyz.y*(iy - ny)-src.y)*(d3xyz.y*(iy - ny)-src.y) + (d3xyz.z*(iz - nz)-src.z)*(d3xyz.z*(iz - nz)-src.z) );
         weight *= weight;
@@ -272,7 +309,9 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
         
         if ( ( max_u < 0 ) || ( min_u >= nu ) ) continue;
 
-        C = weight * rect_rect_factor * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
+        C *= weight * rect_rect_factor;
+        
+        C *= (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
 
         float sumV = 0.0f;
 
@@ -325,7 +364,7 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 
                 float f = gamma * fmaxf(fminf(s1,vs[1]) - fmaxf(s2,vs[0]),0);
 
-                idxv = i * nu + j;
+                idxv = j * nu + i;
                 
                 if(idxv < nuv && idxv >= 0) {
                     sumV += proj[idxv] * f;
@@ -346,8 +385,8 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 void SF::project(Matrix &vol, Matrix &proj, double weight) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
         float lsd = *geodata->lsds[p];
-        float factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
-        //std::cout << p <<' ' << factor << std::endl;
+        double factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
+        //std::cout << p <<' ' << p * geodata->nuv.x * geodata->nuv.y << std::endl;
 
         SF_project<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
                                       make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);

@@ -22,6 +22,8 @@ add_library(network STATIC
     utils/dataset.hh
     utils/matrix.cu
     utils/matrix.hh
+    utils/matrix_double.cu
+    utils/matrix_double.hh
     utils/shape.cu
     utils/shape.hh
     utils/geo.cu

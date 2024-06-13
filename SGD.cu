@@ -165,18 +165,19 @@ int main() {
     //GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
     GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
     geo->geo_init_example(800, 600, 0.0f, 255.0*PI/128.0);
+    //geo->geo_init_example(800, 600, 0.0f, PI);
     geo->initialize_projection_matrix();
 
     SF *sf_layer = new SF(geo);
 
-    Matrix x(160*400*400, 1);
+    Matrix x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
     x.allocateMemory();
 
-    for(int i=0; i<160; ++i){ //z
-        for(int j=0; j<400; ++j){ //y
-            for(int k=0; k<400; ++k) { //x
-                int idx = i*400*400+j*400+k;
-                double di = i-80, dj = j-200, dk = k-200;
+    for(int i=0; i<geo->nxyz.z; ++i){ //z
+        for(int j=0; j<geo->nxyz.y; ++j){ //y
+            for(int k=0; k<geo->nxyz.x; ++k) { //x
+                int idx = i*geo->nxyz.y*geo->nxyz.x + j*geo->nxyz.x + k;
+                double di = i-(geo->nxyz.z/2), dj = j-(geo->nxyz.y/2), dk = k-(geo->nxyz.x/2);
                 if(sqrt(di*di + dj*dj + dk*dk) < 100.0){
                     *x[idx] = 1.0f;
                 }
@@ -189,9 +190,9 @@ int main() {
     x.copyHostToDevice();
 
     //Matrix y(256*510*525, 1);
-    Matrix y(256*520*265, 1);
+    MatrixD y(geo->np * geo->nuv.x * geo->nuv.y, 1);
     y.allocateMemory();
-    std::fill(y[0], y[256*520*265-1], 0.0f);
+    std::fill(y[0], y[geo->np * geo->nuv.x * geo->nuv.y-1], 0.0f);
     y.copyHostToDevice();
 
     std::cerr<< "Finished generating input data" << std::endl;
@@ -208,7 +209,25 @@ int main() {
 
     std::cerr<< "Finished copy to host" << std::endl;
 
-    std::cerr << *y[520*200+150] << std::endl;
+    for(int p=0; p<geo->np; ++p) {
+        char filename[100];
+        sprintf(filename, "images/projection%03d.pgm", p);
+        FILE *f = fopen(filename, "wb");
+        fprintf(f, "P5\n%i %i 255\n", geo->nuv.x, geo->nuv.y);
+
+        float max = *std::max_element(y[p * geo->nuv.x * geo->nuv.y], y[(p+1) * geo->nuv.x * geo->nuv.y]);
+
+        for(int u=0; u<geo->nuv.y; ++u) {
+            for(int v=0; v<geo->nuv.x; ++v) {
+                float val = *y[p*geo->nuv.x*geo->nuv.y + u*geo->nuv.x + v];
+                val *= 255.0f / max;
+                val = fmaxf(0.0f, val);
+                unsigned char c = 255 - val;
+                fputc(c, f);
+            }
+        }
+        fclose(f);
+    }
     
     return 0;
 }

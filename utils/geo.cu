@@ -195,7 +195,7 @@ void GeoData::initialize_projection_matrix() {
     pmis.copyHostToDevice();
 }
 
-void rotate(float *vec, float *res, float angle) {
+void rotate(float *vec, float *res, double angle) {
     res[0] = vec[0] * cos(angle) - vec[1] * sin(angle);
     res[1] = vec[0] * sin(angle) + vec[1] * cos(angle);
     res[2] = vec[2];
@@ -210,7 +210,7 @@ void GeoData::geo_init_example(float lsd, float lso,  float start_angle, float e
     float pvv[3] = {0.0f, 0.0f, duv.y};
 
     for(int i = 0; i < np; ++i) {
-        float beta = start_angle + i * dangle;
+        double beta = start_angle + i * dangle;
 
         rotate(src, srcs[i*3], beta);
         rotate(dtv, dtvs[i*3], beta);
@@ -219,7 +219,7 @@ void GeoData::geo_init_example(float lsd, float lso,  float start_angle, float e
 
         *lsds[i] = lsd;
         *lsos[i] = lso;
-        *ucs[i] = float(nuv.x) / 2;
-        *vcs[i] = float(nuv.y) / 2;
+        *ucs[i] = double(nuv.x) / 2.0;
+        *vcs[i] = double(nuv.y) / 2.0;
     }
 }

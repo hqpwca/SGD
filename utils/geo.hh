@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "matrix.hh"
+#include "matrix_double.hh"
 
 #define PI 3.141592653589793f
 

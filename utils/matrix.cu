@@ -80,17 +80,17 @@ void Matrix::copyDeviceToHost() {
 }
 
 float* Matrix::operator[](const int index) {
-	return &data_host.get()[index];
+	return &data_host.get()[0] + index;
 }
 
 const float* Matrix::operator[](const int index) const {
-	return &data_host.get()[index];
+	return &data_host.get()[0] + index;
 }
 
 float* Matrix::operator()(const int index) {
-	return &data_device.get()[index];
+	return &data_device.get()[0] + index;
 }
 
 const float* Matrix::operator()(const int index) const {
-	return &data_device.get()[index];
+	return &data_device.get()[0] + index;
 }
