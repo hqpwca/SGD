@@ -190,7 +190,7 @@ int main() {
     x.copyHostToDevice();
 
     //Matrix y(256*510*525, 1);
-    MatrixD y(geo->np * geo->nuv.x * geo->nuv.y, 1);
+    Matrix y(geo->np * geo->nuv.x * geo->nuv.y, 1);
     y.allocateMemory();
     std::fill(y[0], y[geo->np * geo->nuv.x * geo->nuv.y-1], 0.0f);
     y.copyHostToDevice();
