@@ -197,8 +197,6 @@ int main() {
 
     std::cout<< "Finished forward projection" << std::endl;
 
-    cudaDeviceSynchronize();
-
     y.copyDeviceToHost();
 
     std::cout<< "Finished copy to host" << std::endl;

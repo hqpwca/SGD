@@ -337,11 +337,13 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 
 void SF::project(Matrix &vol, Matrix &proj, double weight) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
+        std::cerr << p << std::endl;
         float lsd = *geodata->lsds[p];
         float factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
 
         SF_project<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
                                       make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);
+        cudaDeviceSynchronize();
     }
 }
 

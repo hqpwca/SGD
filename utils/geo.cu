@@ -134,9 +134,12 @@ __host__ void generate_projection_matrix(float *pm, float *pmi, const float *src
     int nx,ny,nz;
     float dx,dy,dz,ox,oy,oz;
 
-    dx = d3xyz.x, nx = n3xyz.x;
-    dy = d3xyz.y, nx = n3xyz.y;
-    dz = d3xyz.z, nx = n3xyz.z;
+    dx = d3xyz.x;
+    nx = n3xyz.x;
+    dy = d3xyz.y;
+    ny = n3xyz.y;
+    dz = d3xyz.z;
+    nz = n3xyz.z;
 
     ox = (nx-1)*dx/2.0f; 
     oy = (ny-1)*dy/2.0f;
