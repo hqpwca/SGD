@@ -191,11 +191,19 @@ int main() {
     std::fill(y[0], y[256*510*525-1], 0.0f);
     y.copyHostToDevice();
 
+    std::cout<< "Finished generating input data" << std::endl;
+
     sf_layer->project(x, y, 1.0);
+
+    std::cout<< "Finished forward projection" << std::endl;
 
     cudaDeviceSynchronize();
 
     y.copyDeviceToHost();
+
+    std::cout<< "Finished copy to host" << std::endl;
+
+    std::cout << *y[100*505*523+505*200+300] << std::endl;
     
     return 0;
 }

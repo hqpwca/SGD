@@ -47,12 +47,12 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
     int z_end = z_start + z_size;
     z_end = min(n3xyz.z, z_end);
 
-    int x2,y2,z2,nx,ny,nz;
+    int nx,ny,nz;
     float min_u, max_u, min_v, max_v;
-    float s1, s2, f1, f2;
+    float s1, s2;
     float us[4] = {0.0};
     float vs[2] = {0.0};
-    int idxu, idxv;
+    int idxv;
     float C;
 
     nx = n3xyz.x, ny = n3xyz.y, nz = n3xyz.z;
@@ -193,12 +193,12 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
     int z_end = z_start + z_size;
     z_end = min(n3xyz.z, z_end);
 
-    int x2,y2,z2,nx,ny,nz;
+    int nx,ny,nz;
     float min_u, max_u, min_v, max_v;
-    float s1, s2, f1, f2;
+    float s1, s2;
     float us[4] = {0.0};
     float vs[2] = {0.0};
-    int idxu, idxv;
+    int idxv;
     float C;
 
     nx = n3xyz.x, ny = n3xyz.y, nz = n3xyz.z;
@@ -340,7 +340,7 @@ void SF::project(Matrix &vol, Matrix &proj, double weight) { // data processing 
         float lsd = *geodata->lsds[p];
         float factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
 
-        SF_project<<<vgrid, vblock>>>(proj(0), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
+        SF_project<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
                                       make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);
     }
 }
@@ -350,15 +350,15 @@ void SF::back_project(Matrix &vol, Matrix &proj, double weight) {
 }
 
 Matrix& SF::forward(cublasHandle_t &cublasH, Matrix &x) {
-    Matrix y(geodata->nuv.x * geodata->nuv.y, geodata->np);
-    y.allocateCudaMemory();
-    project(x, y, 1.0f);
+    Matrix *y = new Matrix(geodata->nuv.x * geodata->nuv.y, geodata->np);
+    y->allocateCudaMemory();
+    project(x, *y, 1.0f);
 
-    return y;
+    return *y;
 }
 
 Matrix& SF::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr) {
-
+    
 }
 
 SF::SF(GeoData *geo) {
