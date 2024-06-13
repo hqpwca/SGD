@@ -162,8 +162,8 @@ int main(int argc, char *argv[]) {
 */
 
 int main() {
-    //GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
-    GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
+    GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
+    //GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
     geo->geo_init_example(800, 600, 0.0f, 255.0*PI/128.0);
     //geo->geo_init_example(800, 600, 0.0f, PI);
     geo->initialize_projection_matrix();
@@ -187,12 +187,24 @@ int main() {
             }
         }
     }
+
+    for(int i=0; i<geo->nxyz.z; ++i){ //z
+        for(int j=0; j<geo->nxyz.y; ++j){ //y
+            for(int k=0; k<geo->nxyz.x; ++k) { //x
+                int idx = i*geo->nxyz.y*geo->nxyz.x + j*geo->nxyz.x + k;
+                double di = i-80, dj = j-80, dk = k-80;
+                if(sqrt(di*di + dj*dj + dk*dk) < 20.0){
+                    *x[idx] = 0.0f;
+                }
+            }
+        }
+    }
     x.copyHostToDevice();
 
     //Matrix y(256*510*525, 1);
     Matrix y(geo->np * geo->nuv.x * geo->nuv.y, 1);
     y.allocateMemory();
-    std::fill(y[0], y[geo->np * geo->nuv.x * geo->nuv.y-1], 0.0f);
+    std::fill(y[0], y[geo->np * geo->nuv.x * geo->nuv.y], 0.0f);
     y.copyHostToDevice();
 
     std::cerr<< "Finished generating input data" << std::endl;
@@ -208,6 +220,26 @@ int main() {
     y.copyDeviceToHost();
 
     std::cerr<< "Finished copy to host" << std::endl;
+
+    Matrix rx(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
+    rx.allocateMemory();
+    std::fill(rx[0], rx[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x], 0.0f);
+    rx.copyHostToDevice();
+
+    std::cerr<< "Starting BackProjection" << std::endl;
+
+    start = std::chrono::high_resolution_clock::now();
+
+    sf_layer->back_project(rx, y, 1.0);
+
+    stop = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    std::cerr<< "Finished backward projection in " << duration.count() << " milliseconds." << std::endl;
+
+    rx.copyDeviceToHost();
+
+    std::cerr<< *std::max_element(rx[0], rx[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x]) << std::endl;
 
     for(int p=0; p<geo->np; ++p) {
         char filename[100];
@@ -228,6 +260,26 @@ int main() {
         }
         fclose(f);
     }
-    
+
+    for(int z=0; z<geo->nxyz.z; ++z) {
+        char filename[100];
+        sprintf(filename, "back_images/backprojection%03d.pgm", z);
+        FILE *f = fopen(filename, "wb");
+        fprintf(f, "P5\n%i %i 255\n", geo->nxyz.y, geo->nxyz.x);
+
+        float max = *std::max_element(rx[z * geo->nxyz.y * geo->nxyz.x], rx[(z+1) * geo->nxyz.y * geo->nxyz.x]);
+
+        for(int u=0; u<geo->nxyz.y; ++u) {
+            for(int v=0; v<geo->nxyz.x; ++v) {
+                float val = *rx[z*geo->nxyz.x*geo->nxyz.y + u*geo->nxyz.x + v];
+                val *= 255.0f / max;
+                val = fmaxf(0.0f, val);
+                unsigned char c = 255 - val;
+                fputc(c, f);
+            }
+        }
+        fclose(f);
+    }
+  
     return 0;
 }
