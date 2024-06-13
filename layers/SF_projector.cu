@@ -99,6 +99,9 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
         if ( min_v >= nv ) return;
 
         vs[1] = ( pmv2 + pm[6] *signz2 ) / ( pmv3 + pm[10]*signz2 );
+        
+        max_v = ceilf(vs[1] - 0.5f);
+        if ( max_v < 0 ) continue;
 
         C = vol[idx];
         if (C == 0) continue;
@@ -121,11 +124,13 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
         
         if ( ( max_u < 0 ) || ( min_u >= nu ) ) continue;
 
-        C *= weight * rect_rect_factor * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
+        C *= weight * rect_rect_factor;
+        
+        C *= (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
 
         for (int i = min_u; i < max_u; ++i) {
-            s1 = i + 0.5f;
-            s2 = i - 0.5f;
+            s1 = i - 0.5f;
+            s2 = i + 0.5f;
             float gamma = 0.0f, tmp = 0.0f;
             float b1, b2;
 
@@ -246,6 +251,9 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 
         vs[1] = ( pmv2 + pm[6] *signz2 ) / ( pmv3 + pm[10]*signz2 );
 
+        max_v = ceilf(vs[1] - 0.5f);
+        if ( max_v < 0 ) continue;
+
         weight = rsqrtf( (d3xyz.x*(ix - nx)-src.x)*(d3xyz.x*(ix - nx)-src.x) + (d3xyz.y*(iy - ny)-src.y)*(d3xyz.y*(iy - ny)-src.y) + (d3xyz.z*(iz - nz)-src.z)*(d3xyz.z*(iz - nz)-src.z) );
         weight *= weight;
 
@@ -337,9 +345,9 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 
 void SF::project(Matrix &vol, Matrix &proj, double weight) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
-        std::cerr << p << std::endl;
         float lsd = *geodata->lsds[p];
         float factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
+        //std::cout << p <<' ' << factor << std::endl;
 
         SF_project<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
                                       make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);

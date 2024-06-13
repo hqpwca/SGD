@@ -9,6 +9,7 @@
 #include <iostream>
 #include <random>
 #include <exception>
+#include <chrono>
 
 #include "assert.h"
 #include "stdlib.h"
@@ -161,20 +162,21 @@ int main(int argc, char *argv[]) {
 */
 
 int main() {
-    GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
+    //GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
+    GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
     geo->geo_init_example(800, 600, 0.0f, 255.0*PI/128.0);
     geo->initialize_projection_matrix();
 
     SF *sf_layer = new SF(geo);
 
-    Matrix x(256*256*256, 1);
+    Matrix x(160*400*400, 1);
     x.allocateMemory();
 
-    for(int i=0; i<256; ++i){ //z
-        for(int j=0; j<256; ++j){ //y
-            for(int k=0; k<256; ++k) { //x
-                int idx = i*256*256+j*256+k;
-                double di = i-128, dj = j-128, dk = k-128;
+    for(int i=0; i<160; ++i){ //z
+        for(int j=0; j<400; ++j){ //y
+            for(int k=0; k<400; ++k) { //x
+                int idx = i*400*400+j*400+k;
+                double di = i-80, dj = j-200, dk = k-200;
                 if(sqrt(di*di + dj*dj + dk*dk) < 100.0){
                     *x[idx] = 1.0f;
                 }
@@ -186,22 +188,27 @@ int main() {
     }
     x.copyHostToDevice();
 
-    Matrix y(256*510*525, 1);
+    //Matrix y(256*510*525, 1);
+    Matrix y(256*520*265, 1);
     y.allocateMemory();
-    std::fill(y[0], y[256*510*525-1], 0.0f);
+    std::fill(y[0], y[256*520*265-1], 0.0f);
     y.copyHostToDevice();
 
-    std::cout<< "Finished generating input data" << std::endl;
+    std::cerr<< "Finished generating input data" << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
 
     sf_layer->project(x, y, 1.0);
 
-    std::cout<< "Finished forward projection" << std::endl;
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    std::cerr<< "Finished forward projection in " << duration.count() << " milliseconds." << std::endl;
 
     y.copyDeviceToHost();
 
-    std::cout<< "Finished copy to host" << std::endl;
+    std::cerr<< "Finished copy to host" << std::endl;
 
-    std::cout << *y[100*505*523+505*200+300] << std::endl;
+    std::cerr << *y[520*200+150] << std::endl;
     
     return 0;
 }

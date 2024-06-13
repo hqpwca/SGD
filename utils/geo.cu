@@ -1,6 +1,6 @@
 #include "geo.hh"
 
-__host__ void multm(double *a, double *b, int x, int y, int z)
+void multm(double *a, double *b, int x, int y, int z)
 {
     double *c;
     int i,j,k,m;
@@ -27,7 +27,7 @@ __host__ void multm(double *a, double *b, int x, int y, int z)
     }
 }
 
-__host__ void invert3(double *m)
+void invert3(double *m)
 {
     int i;
     double n[] = {0,0,0,0,0,0,0,0,0};
@@ -66,6 +66,8 @@ __host__ void generate_projection_matrix(float *pm, float *pmi, const float *src
     norm[1] = puv[2]*pvv[0] - puv[0]*pvv[2];
     norm[2] = puv[0]*pvv[1] - puv[1]*pvv[0];
 
+    //std::cout << norm[0] << ' ' << norm[1] << ' ' << norm[2] << std::endl << std::endl;
+
     k = 0.0f;
     for (i=0;i<3;i++) k += norm[i]*(dtv[i]-src[i]);
 
@@ -96,6 +98,7 @@ __host__ void generate_projection_matrix(float *pm, float *pmi, const float *src
 
     multm(divdot,pm4,4,4,4); //get ratio of S->O and S->P by division of 2 dot product with vector perpendicular to detector plane
 
+
     // scale
     double scale[] = {
         k,0,0,0,
@@ -123,13 +126,14 @@ __host__ void generate_projection_matrix(float *pm, float *pmi, const float *src
 
     multm(align,pm4,3,3,4); // (x, y, z) vector to (u, v) pixel
 
-    // copy temporary matrix to output, scale by value in lower right corner
     for (i=0;i<3;i++) {
         for (j=0;j<4;j++) {
             l = i*4 + j;
             pm[l] = pm4[l]/pm4[11];
         }
     }
+
+    // copy temporary matrix to output, scale by value in lower right corner
 
     int nx,ny,nz;
     float dx,dy,dz,ox,oy,oz;
@@ -181,6 +185,7 @@ void GeoData::initialize_projection_matrix() {
         int i = p * 3;
         int j = p * 12;
 
+        //std::cout << p << std::endl;
         generate_projection_matrix(pms[j], pmis[j], srcs[i], dtvs[i], puvs[i], pvvs[i], *ucs[p], *vcs[p], nxyz, dxyz);
     }
 
@@ -192,7 +197,7 @@ void GeoData::initialize_projection_matrix() {
 
 void rotate(float *vec, float *res, float angle) {
     res[0] = vec[0] * cos(angle) - vec[1] * sin(angle);
-    res[1] = vec[0] * sin(angle) + vec[1] * sin(angle);
+    res[1] = vec[0] * sin(angle) + vec[1] * cos(angle);
     res[2] = vec[2];
 }
 
