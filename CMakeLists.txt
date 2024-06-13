@@ -36,12 +36,12 @@ target_compile_features(network PUBLIC cxx_std_14)
 set_target_properties( network
                         PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(network PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
+target_compile_options(network PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
 
 add_executable(SGD SGD.cu)
 
 set_property(TARGET SGD 
             PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(SGD PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-g -G>)
+target_compile_options(SGD PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
 target_link_libraries(SGD PRIVATE network -lcublas)
