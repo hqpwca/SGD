@@ -18,6 +18,8 @@ add_library(network STATIC
     layers/layer.hh
     layers/SF_projector.cu
     layers/SF_projector.hh
+    layers/Ref_projector.cu
+    layers/Ref_projector.hh
     utils/dataset.cu
     utils/dataset.hh
     utils/matrix.cu

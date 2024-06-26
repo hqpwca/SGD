@@ -10,7 +10,7 @@
 #include "SF_projector.hh"
 #include "../utils/exception.hh"
 
-__device__ void sort2(float* a, float* b)
+__device__ static void sort2(float* a, float* b)
 {
     if (*a > *b)
     {
@@ -20,7 +20,7 @@ __device__ void sort2(float* a, float* b)
     }
 }
 
-__device__ void sort4(float* a, float* b, float* c, float* d)
+__device__ static void sort4(float* a, float* b, float* c, float* d)
 {
 
     sort2(a,b);
@@ -36,7 +36,7 @@ __device__ void sort4(float* a, float* b, float* c, float* d)
 
 }
 
-__device__ void sort2(double* a, double* b)
+__device__ static void sort2(double* a, double* b)
 {
     if (*a > *b)
     {
@@ -46,7 +46,7 @@ __device__ void sort2(double* a, double* b)
     }
 }
 
-__device__ void sort4(double* a, double* b, double* c, double* d)
+__device__ static void sort4(double* a, double* b, double* c, double* d)
 {
 
     sort2(a,b);
@@ -62,7 +62,7 @@ __device__ void sort4(double* a, double* b, double* c, double* d)
 
 }
 
-__device__ void gamma_calculate(float s1, float s2, float *us, float *gamma) {
+__device__ static void gamma_calculate(float s1, float s2, float *us, float *gamma) {
     float tmp = 0.0f;
     float b1, b2;
 
@@ -72,7 +72,7 @@ __device__ void gamma_calculate(float s1, float s2, float *us, float *gamma) {
     if(b2 > b1){
         float _a = b1 - us[0];
         float _b = b2 - b1;
-        tmp =  _b * _b + 2 * _a * _b / (2 * (us[1] - us[0]));
+        tmp =  (_b * _b + 2 * _a * _b) / (2 * (us[1] - us[0]));
     }
     else {
         tmp = 0.0f;
@@ -96,7 +96,7 @@ __device__ void gamma_calculate(float s1, float s2, float *us, float *gamma) {
     if(b2 > b1){
         float _b = b2 - b1;
         float _c = us[3] - b2;
-        tmp = _b * _b + 2 * _b * _c / (2 * (us[3] - us[2]));
+        tmp = (_b * _b + 2 * _b * _c) / (2 * (us[3] - us[2]));
     }
     else{
         tmp = 0.0f;
@@ -105,7 +105,7 @@ __device__ void gamma_calculate(float s1, float s2, float *us, float *gamma) {
 }
 
 // block_size: (8, 8, 64) ILP on z-axis.
-__global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, double rect_rect_factor, int z_size)
+__global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, double rect_rect_factor, int z_size, bool trap_v = false)
 {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -115,11 +115,13 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
     int z_end = z_start + z_size;
     z_end = min(n3xyz.z, z_end);
 
+    if(ix >= n3xyz.x || iy >= n3xyz.y || z_end <= z_start) return;
+
     int nx,ny,nz;
     float min_u, max_u, min_v, max_v;
     float s1, s2;
     float us[4] = {0.0};
-    float vs[2] = {0.0};
+    float vs[4] = {0.0};
     int idxv;
     float C;
 
@@ -134,6 +136,7 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
         
     float pmv2, pmv3;
     float u1, u2, u3, u4, u5, u6, u7, u8;
+    float v1, v2, v3, v4;
     pmv2 = pm[4]*ix + pm[5]*iy + pm[7]; //matrix multiplication result without z-axis
     pmv3 = pm[8]*ix + pm[9]*iy + pm[11]; //matrix multiplication result without z-axis, normalization
 
@@ -155,21 +158,43 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
     u7 = pm[0]*signx2 + pm[1]*signy2 + pm[3];
     u8 = pm[8]*signx2 + pm[9]*signy2 + pm[11];
 
+    if (trap_v) {
+        v1 = pm[4]*signx1 + pm[5]*iy + pm[7];
+        v2 = pm[4]*signx2 + pm[5]*iy + pm[7];
+        v3 = pm[8]*signx1 + pm[9]*iy + pm[11];
+        v4 = pm[8]*signx2 + pm[9]*iy + pm[11];
+    }
+
     for (int iz = z_start; iz < z_end; ++iz) {
         idx = ( (size_t) (iz) )*( (size_t) n3xyz.x*n3xyz.y ) + idx0;
 
         signz1 = (iz-0.5f);
         signz2 = (iz+0.5f);
 
-        vs[0] = ( pmv2 + pm[6] *signz1 ) / ( pmv3 + pm[10]*signz1 );
+        if(!trap_v) {
+            vs[0] = ( pmv2 + pm[6] *signz1 ) / ( pmv3 + pm[10]*signz1 );
 
-        min_v = ceilf(vs[0] - 0.5f);
-        if ( min_v >= nv ) return;
+            min_v = ceilf(vs[0] - 0.5f);
+            if ( min_v >= nv ) return;
 
-        vs[1] = ( pmv2 + pm[6] *signz2 ) / ( pmv3 + pm[10]*signz2 );
-        
-        max_v = ceilf(vs[1] - 0.5f);
-        if ( max_v < 0 ) continue;
+            vs[1] = ( pmv2 + pm[6] *signz2 ) / ( pmv3 + pm[10]*signz2 );
+            
+            max_v = ceilf(vs[1] - 0.5f);
+            if ( max_v < 0 ) continue;
+        }
+        else {
+            vs[0] = ( v1 + pm[6] * signz1 ) / ( v3 + pm[10] * signz1 );
+            vs[1] = ( v1 + pm[6] * signz2 ) / ( v3 + pm[10] * signz2 );
+            vs[2] = ( v2 + pm[6] * signz1 ) / ( v4 + pm[10] * signz1 );
+            vs[3] = ( v2 + pm[6] * signz2 ) / ( v4 + pm[10] * signz2 );
+
+            sort4(vs, vs+1, vs+2, vs+3);
+
+            min_v = ceilf(vs[0] - 0.5f);
+            max_v = ceilf(vs[3] - 0.5f);
+
+            if ( ( max_v < 0 ) || ( min_v >= nv ) ) continue;
+        }
 
         C = vol[idx];
         if (C == 0) continue;
@@ -192,7 +217,12 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
         
         if ( ( max_u < 0 ) || ( min_u >= nu ) ) continue;
         
-        C *= weight * rect_rect_factor * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
+        if(trap_v){
+            C *= weight * rect_rect_factor * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (2 / ( vs[3] - vs[0] ) + (vs[2] - vs[1]) );
+        }
+        else {
+            C *= weight * rect_rect_factor * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) * (1 / ( vs[1] - vs[0] ) );
+        }
 
         for (int ti = 0; ti < max_u - min_u + 1; ++ti) {
             int i = ti + min_u;
@@ -201,7 +231,6 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
             s2 = i + 0.5f;
 
             float gamma = 0.0f;
-
             gamma_calculate(s1, s2, us, &gamma);
 
             for (int tj = 0; tj < max_v - min_v + 1; ++tj) {
@@ -209,7 +238,16 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
                 s1 = j + 0.5f;
                 s2 = j - 0.5f;
 
-                float f2 = gamma * fmaxf(fminf(s1,vs[1]) - fmaxf(s2,vs[0]),0);
+                float f2;
+
+                if(trap_v) {
+                    float gamma2 = 0.0f;
+                    gamma_calculate(s2, s1, vs, &gamma2);
+
+                    f2 = gamma * gamma2;
+                }
+                else
+                    f2 = gamma * fmaxf(fminf(s1,vs[1]) - fmaxf(s2,vs[0]),0);
 
                 idxv = j * nu + i;
                 
@@ -224,7 +262,7 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
 // block_size: (8, 8, 64) ILP on z-axis.
 __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, double rect_rect_factor, int z_size)
 {
-        int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
+    int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
     int oz = (blockIdx.z * blockDim.z) + threadIdx.z;
 
@@ -343,23 +381,24 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 }
 
 
-void SF::project(Matrix &vol, Matrix &proj, double weight) { // data processing on device
+void SF::project(Matrix &vol, Matrix &proj, double weight, bool tt) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
+        if(p != 0 && p != 15 && p != 35 && p != 45) continue;
+
         float lsd = *geodata->lsds[p];
         double factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
         //std::cout << p <<' ' << p * geodata->nuv.x * geodata->nuv.y << std::endl;
 
         SF_project<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
-                                      make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);
+                                      make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE, tt);
         cudaDeviceSynchronize();
     }
 }
 
-void SF::back_project(Matrix &vol, Matrix &proj, double weight) {
+void SF::back_project(Matrix &vol, Matrix &proj, double weight, bool tt) {
     for(int p=0; p<geodata->np; p++) {
         float lsd = *geodata->lsds[p];
         double factor = lsd  * geodata->dxyz.x / (geodata->np);
-        std::cout << p <<' ' << factor << std::endl;
 
         SF_backproject<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
                                       make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);

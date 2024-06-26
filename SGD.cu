@@ -19,6 +19,7 @@
 
 #include "network.hh"
 #include "layers/SF_projector.hh"
+#include "layers/Ref_projector.hh"
 #include "utils/dataset.hh"
 
 #define BATCH_SIZE 256
@@ -162,32 +163,38 @@ int main(int argc, char *argv[]) {
 */
 
 int main() {
-    GeoData *geo = new GeoData(256, 256, 256, 505, 523, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
+    GeoData *geo = new GeoData(1, 1, 1, 500, 500, 360, 1, 1, 1, 0.01, 0.01);
     //GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
-    geo->geo_init_example(800, 600, 0.0f, 255.0*PI/128.0);
+    geo->geo_init_example(11, 5, 0.0f, PI*2 * 359/360);
     //geo->geo_init_example(800, 600, 0.0f, PI);
     geo->initialize_projection_matrix();
 
     SF *sf_layer = new SF(geo);
+    Ref *ref_layer = new Ref(geo);
 
     Matrix x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
     x.allocateMemory();
 
-    for(int i=0; i<geo->nxyz.z; ++i){ //z
-        for(int j=0; j<geo->nxyz.y; ++j){ //y
-            for(int k=0; k<geo->nxyz.x; ++k) { //x
-                int idx = i*geo->nxyz.y*geo->nxyz.x + j*geo->nxyz.x + k;
-                double di = i-(geo->nxyz.z/2), dj = j-(geo->nxyz.y/2), dk = k-(geo->nxyz.x/2);
-                if(sqrt(di*di + dj*dj + dk*dk) < 100.0){
-                    *x[idx] = 1.0f;
-                }
-                else {
-                    *x[idx] = 0.0f;
-                }
-            }
-        }
-    }
+    std::fill(x[0], x[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x], 1.0f);
 
+    // for(int i=0; i<geo->nxyz.z; ++i){ //z
+    //     for(int j=0; j<geo->nxyz.y; ++j){ //y
+    //         for(int k=0; k<geo->nxyz.x; ++k) { //x
+    //             int idx = i*geo->nxyz.y*geo->nxyz.x + j*geo->nxyz.x + k;
+    //             double di = i-(geo->nxyz.z/2), dj = j-(geo->nxyz.y/2), dk = k-(geo->nxyz.x/2);
+    //             if(sqrt(di*di + dj*dj + dk*dk) < 1e-5){
+    //                 *x[idx] = 1.0f;
+    //             }
+    //             else {
+    //                 *x[idx] = 0.0f;
+    //             }
+    //         }
+    //     }
+    // }
+
+    // Add a small empty sphere inside
+
+    /*
     for(int i=0; i<geo->nxyz.z; ++i){ //z
         for(int j=0; j<geo->nxyz.y; ++j){ //y
             for(int k=0; k<geo->nxyz.x; ++k) { //x
@@ -199,6 +206,9 @@ int main() {
             }
         }
     }
+
+    */
+
     x.copyHostToDevice();
 
     //Matrix y(256*510*525, 1);
@@ -210,76 +220,244 @@ int main() {
     std::cerr<< "Finished generating input data" << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
 
-    sf_layer->project(x, y, 1.0);
+    //sf_layer->project(x, y, 1.0, true);
+    ref_layer->project(x, y, 1.0);
 
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    std::cerr<< "Finished forward projection in " << duration.count() << " milliseconds." << std::endl;
+    std::cerr<< "Finished Ref forward projection for 4 projs in " << duration.count() << " milliseconds." << std::endl;
 
     y.copyDeviceToHost();
 
-    std::cerr<< "Finished copy to host" << std::endl;
-
-    Matrix rx(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
-    rx.allocateMemory();
-    std::fill(rx[0], rx[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x], 0.0f);
-    rx.copyHostToDevice();
-
-    std::cerr<< "Starting BackProjection" << std::endl;
+    Matrix sy(geo->np * geo->nuv.x * geo->nuv.y, 1);
+    sy.allocateMemory();
+    std::fill(sy[0], sy[geo->np * geo->nuv.x * geo->nuv.y], 0.0f);
+    sy.copyHostToDevice();
 
     start = std::chrono::high_resolution_clock::now();
 
-    sf_layer->back_project(rx, y, 1.0);
+    sf_layer->project(x, sy, 1.0, true);
+    //ref_layer->project(x, y, 1.0);
 
     stop = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
-    std::cerr<< "Finished backward projection in " << duration.count() << " milliseconds." << std::endl;
+    std::cerr<< "Finished SF forward projection for 4 projs in " << duration.count() << " milliseconds." << std::endl;
 
-    rx.copyDeviceToHost();
+    sy.copyDeviceToHost();
 
-    std::cerr<< *std::max_element(rx[0], rx[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x]) << std::endl;
+    // float maxerr45 = 0.0f, maxerr22dot5 = 0.0f;
 
-    for(int p=0; p<geo->np; ++p) {
-        char filename[100];
-        sprintf(filename, "images/projection%03d.pgm", p);
-        FILE *f = fopen(filename, "wb");
-        fprintf(f, "P5\n%i %i 255\n", geo->nuv.x, geo->nuv.y);
+    // float max0 = *std::max_element(y[0 * geo->nuv.x * geo->nuv.y], y[(1) * geo->nuv.x * geo->nuv.y]);
+    // float max45 = *std::max_element(y[32 * geo->nuv.x * geo->nuv.y], y[(33) * geo->nuv.x * geo->nuv.y]);
+    // //float max225 = *std::max_element(y[16 * geo->nuv.x * geo->nuv.y], y[(17) * geo->nuv.x * geo->nuv.y]);
 
-        float max = *std::max_element(y[p * geo->nuv.x * geo->nuv.y], y[(p+1) * geo->nuv.x * geo->nuv.y]);
+    // for(int u=0; u<geo->nuv.y; ++u) {
+    //     for(int v=0; v<geo->nuv.x; ++v) {
+    //         int cu = geo->nuv.y/2 - u;
+    //         int cv = geo->nuv.x/2 - v;
+    //         if(cu*cu+cv*cv < 5625) {
+    //             maxerr45 = fmaxf(fabs(*y[u*geo->nuv.x + v]/max0- *y[32*geo->nuv.x*geo->nuv.y + u*geo->nuv.x + v]/max45), maxerr45);
+    //             maxerr22dot5 = fmaxf(fabs(*y[u*geo->nuv.x + v]/max0 - *y[16*geo->nuv.x*geo->nuv.y + u*geo->nuv.x + v]/max225), maxerr22dot5);
+    //         }
+    //     }
+    // }
 
-        for(int u=0; u<geo->nuv.y; ++u) {
-            for(int v=0; v<geo->nuv.x; ++v) {
-                float val = *y[p*geo->nuv.x*geo->nuv.y + u*geo->nuv.x + v];
-                val *= 255.0f / max;
-                val = fmaxf(0.0f, val);
-                unsigned char c = 255 - val;
-                fputc(c, f);
+    // std::cerr<< maxerr45 << std::endl;
+    // std::cerr<< maxerr22dot5 << std::endl;
+
+    // Matrix rx(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
+    // rx.allocateMemory();
+    // std::fill(rx[0], rx[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x], 0.0f);
+    // rx.copyHostToDevice();
+
+    // std::cerr<< "Starting BackProjection" << std::endl;
+
+    // start = std::chrono::high_resolution_clock::now();
+
+    // sf_layer->back_project(rx, y, 1.0);
+
+    // stop = std::chrono::high_resolution_clock::now();
+    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    // std::cerr<< "Finished backward projection in " << duration.count() << " milliseconds." << std::endl;
+
+    // rx.copyDeviceToHost();
+
+    // std::cerr<< *std::max_element(rx[0], rx[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x]) << std::endl;
+
+    int nu = geo->nuv.x;
+    int nv = geo->nuv.y;
+    int np = geo->np;
+
+    for(int p=0; p<np; ++p) {
+        if(p != 0 && p != 15 && p != 35 && p != 45) continue;
+
+        char ref[100], sf[100], dif[100], sft[100];
+        sprintf(ref, "images/ref%03d.pgm", p);
+        sprintf(sf, "images/sf%03d.pgm", p);
+        sprintf(dif, "images/diff%03d.pgm", p);
+        sprintf(sft, "images/sft%03d.pgm", p);
+        FILE *fref = fopen(ref, "wb");
+        FILE *fsf = fopen(sf, "wb");
+        FILE *fdiff = fopen(dif, "wb");
+        FILE *fsft = fopen(sft, "wb");
+        fprintf(fref, "P5\n%i %i 255\n", nu-49, nv-49);
+        fprintf(fsf, "P5\n%i %i 255\n", nu-49, nv-49);
+        fprintf(fdiff, "P5\n%i %i 255\n", nu-49, nv-49);
+        fprintf(fsft, "P5\n%i %i 255\n", nu, nv);
+        // fprintf(f, "P5\n%i %i 255\n", nu, nv);
+
+        double *sumy = new double[(nu+1)*(nv+1)];
+        double *avgy = new double[nu*nv];
+        memset(sumy, 0, nu*nv);
+        memset(avgy, 0, nu*nv);
+
+        double *sumsy = new double[(nu+1)*(nv+1)];
+        double *avgsy = new double[nu*nv];
+        memset(sumsy, 0, nu*nv);
+        memset(avgsy, 0, nu*nv);
+
+        for(int u=0; u<nu; ++u) {
+            for(int v=0; v<nv; ++v) {
+                sumy[(u+1)*nv + (v+1)] = *y[p*nu*nv+u*nv+v] + sumy[u*nv+(v+1)] + sumy[(u+1)*nv+v] - sumy[u*nv+v];
             }
         }
-        fclose(f);
-    }
 
-    for(int z=0; z<geo->nxyz.z; ++z) {
-        char filename[100];
-        sprintf(filename, "back_images/backprojection%03d.pgm", z);
-        FILE *f = fopen(filename, "wb");
-        fprintf(f, "P5\n%i %i 255\n", geo->nxyz.y, geo->nxyz.x);
+        for(int u=0; u<nu; ++u) {
+            for(int v=0; v<nv; ++v) { // [u-49, u] x [v-49, v]
+                int idx = u*nv + v;
+                int idxtl = (u-49)*nv + (v-49);
+                int idxbr = (u+1) *nv + (v+1) ;
+                int idxbl = (u+1) *nv + (v-49);
+                int idxtr = (u-49)*nv + (v+1) ;
 
-        float max = *std::max_element(rx[z * geo->nxyz.y * geo->nxyz.x], rx[(z+1) * geo->nxyz.y * geo->nxyz.x]);
-
-        for(int u=0; u<geo->nxyz.y; ++u) {
-            for(int v=0; v<geo->nxyz.x; ++v) {
-                float val = *rx[z*geo->nxyz.x*geo->nxyz.y + u*geo->nxyz.x + v];
-                val *= 255.0f / max;
-                val = fmaxf(0.0f, val);
-                unsigned char c = 255 - val;
-                fputc(c, f);
+                if (u < 49 || v < 49 || u >= nu || v >= nv) continue;
+                else {
+                    avgy[idx] = (sumy[idxbr] + sumy[idxtl] - sumy[idxbl] - sumy[idxtr]) / 2500.0;
+                }
             }
         }
-        fclose(f);
+
+        for(int u=0; u<nu; ++u) {
+            for(int v=0; v<nv; ++v) {
+                sumsy[(u+1)*nv + (v+1)] = *sy[p*nu*nv+u*nv+v] + sumsy[u*nv+(v+1)] + sumsy[(u+1)*nv+v] - sumsy[u*nv+v];
+            }
+        }
+
+        for(int u=0; u<nu; ++u) {
+            for(int v=0; v<nv; ++v) { // [u-49, u] x [v-49, v]
+                int idx = u*nv + v;
+                int idxtl = (u-49)*nv + (v-49);
+                int idxbr = (u+1) *nv + (v+1) ;
+                int idxbl = (u+1) *nv + (v-49);
+                int idxtr = (u-49)*nv + (v+1) ;
+
+                if (u < 49 || v < 49 || u >= nu || v >= nv) continue;
+                else {
+                    avgsy[idx] = (sumsy[idxbr] + sumsy[idxtl] - sumsy[idxbl] - sumsy[idxtr]) / 2500.0;
+                }
+            }
+        }
+
+        float max = *std::max_element(avgy, avgy + nv * nu);
+        float maxs = *std::max_element(avgsy, avgsy + nv * nu);
+
+        float *diff = new float[nu * nv];
+        memset(diff, 0, nu*nv);
+
+        for(int u=49; u<nu; ++u){
+            for(int v=49; v<nv; ++v){
+                int idx = u*nv + v;
+
+                diff[idx] = fabs(avgy[idx]/max - avgsy[idx]/maxs);
+            }
+        }
+        
+        float maxdiff = *std::max_element(diff, diff + nv * nu);
+
+        std::cout << max << ' ' << maxs << ' ' << maxdiff << std::endl;
+
+        for(int u=49; u<nu; ++u) {
+            for(int v=49; v<nv; ++v) {
+                //int idx = p*nv*nu + u*nv + v;
+                int idx = u*nv + v;
+
+                float val = avgy[idx];
+                val *= 255.0f / max;
+                val = fmaxf(0.0f, val);
+                //unsigned char c = 255 - val;
+                unsigned char c = val;
+                fputc(c, fref);
+
+                val = avgsy[idx];
+                val *= 255.0f / maxs;
+                val = fmaxf(0.0f, val);
+                //unsigned char c = 255 - val;
+                c = val;
+                fputc(c, fsf);
+
+                val = diff[idx];
+                val *= 255.0f / 0.03;
+                val = fmaxf(0.0f, val);
+                val = fminf(255.0f, val);
+                //unsigned char c = 255 - val;
+                c = val;
+                fputc(c, fdiff);
+            }
+        }
+
+        max = *std::max_element(sy[p * geo->nuv.x * geo->nuv.y], sy[(p+1) * geo->nuv.x * geo->nuv.y]);
+
+        for(int u=0; u<nu; ++u) {
+            for(int v=0; v<nv; ++v) {
+                int idx = p*nv*nu + u*nv + v;
+                //int idx = p* u*nv + v;
+
+                float val = *sy[idx];
+                val *= 255.0f / max;
+                val = fmaxf(0.0f, val);
+                //unsigned char c = 255 - val;
+                unsigned char c = val;
+                fputc(c, fsft);
+            }
+        }
+        fclose(fref);
+        fclose(fsf);
+        fclose(fdiff);
+        fclose(fsft);
+
+        delete[] sumy;
+        delete[] avgy;
+        delete[] sumsy;
+        delete[] avgsy;
+        delete[] diff;
     }
+
+    // for(int z=0; z<geo->nxyz.z; ++z) {
+    //     char filename[100];
+    //     sprintf(filename, "back_images/backprojection%03d.pgm", z);
+    //     FILE *f = fopen(filename, "wb");
+    //     fprintf(f, "P5\n%i %i 255\n", geo->nxyz.y, geo->nxyz.x);
+
+    //     float max = *std::max_element(rx[z * geo->nxyz.y * geo->nxyz.x], rx[(z+1) * geo->nxyz.y * geo->nxyz.x]);
+
+    //     for(int u=0; u<geo->nxyz.y; ++u) {
+    //         for(int v=0; v<geo->nxyz.x; ++v) {
+    //             float val = *rx[z*geo->nxyz.x*geo->nxyz.y + u*geo->nxyz.x + v];
+    //             val *= 255.0f / max;
+    //             val = fmaxf(0.0f, val);
+    //             //unsigned char c = 255 - val;
+    //             unsigned char c = val;
+    //             fputc(c, f);
+    //         }
+    //     }
+    //     fclose(f);
+    // }
+
+    // delete sf_layer;
+    delete ref_layer;
   
     return 0;
 }

@@ -1,3 +1,6 @@
+#ifndef GEO_H
+#define GEO_H
+
 #include <cuda_runtime.h>
 #include <memory>
 
@@ -32,3 +35,5 @@ public:
 
     void geo_init_example(float lsd, float lso, float start_angle, float end_angle);
 };
+
+#endif
