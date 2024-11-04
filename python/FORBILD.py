@@ -3,6 +3,8 @@ import ctypes
 # import cupy as cp
 import numpy as np
 
+import pickle
+
 from scipy.integrate import *
 
 from numba import jit, njit
@@ -107,6 +109,37 @@ def _analytical_forbild_phantom(resolution, ear):
         phantomE = np.vstack([leftear, E, E_cavity])
         phantomC = C
 
+    new_phantomE = []
+    for p in phantomE:
+        x0 = p[0]
+        y0 = p[1]
+        a = p[2]
+        b = p[3]
+        phi = p[4]*np.pi/180
+        f = p[5]
+        nclip = p[6]
+
+        DQ = np.array([np.cos(phi) / a, np.sin(phi) / a, -np.sin(phi) / b, np.cos(phi) / b])
+        
+        pl = np.append(p, DQ)
+
+        new_phantomE.append(pl)
+
+    new_phantomE = np.array(new_phantomE)
+
+    newC = []
+
+    newC.append(C[0])
+    new_angle = np.array(C[1]) * np.pi / 180
+    newC.append(new_angle)
+    newC.append(np.cos(new_angle))
+    newC.append(np.sin(new_angle))
+
+    newC = np.array(newC)
+
+    phantomE = new_phantomE
+    phantomC = newC
+
     return phantomE, phantomC
 
 phantomE, phantomC = _analytical_forbild_phantom(True, True)
@@ -120,9 +153,8 @@ def sinogram(thetas, scoord):
     nc = 0
     mask = np.zeros(thetas.shape)
 
-    for k in phantomC[1]:
-        psi = k*np.pi/180
-        tmp = np.fabs(-sinth*np.cos(psi)+costh*np.sin(psi))
+    for k in range(phantomC.shape[1]):
+        tmp = np.fabs(-sinth*phantomC[2, k]+costh*phantomC[3, k])
         mask[tmp < eps] = eps
 
     thetas = thetas + mask
@@ -144,8 +176,7 @@ def sinogram(thetas, scoord):
 
         s0 = np.array([sx-x0, sy-y0])
 
-        DQ = np.array([[np.cos(phi) / a, np.sin(phi) / a], 
-                       [-np.sin(phi) / b, np.cos(phi) / b]])
+        DQ = np.array([[p[7], p[8]], [p[9], p[10]]])
         
         DQthp = DQ @ np.array([-sinth, costh])
         DQs0 = DQ @ s0
@@ -162,20 +193,19 @@ def sinogram(thetas, scoord):
 
         for j in range(nclip):
             d = phantomC[0, nc]
-            psi = phantomC[0, nc]
-            nc += 1
             xp = sx[i] - tp * sinth[i]
             yp = sy[i] + tp * costh[i]
             xq = sx[i] - tq * sinth[i]
             yq = sy[i] + tq * costh[i]
-            tz = d - np.cos(psi) * s0[0, i] - np.sin(psi) * s0[1, i]
-            tz = tz / (-sinth[i] * np.cos(psi) + costh[i] * np.sin(psi))
-            equation2 = (xp - x0) * np.cos(psi) + (yp - y0) * np.sin(psi)
-            equation3 = (xq - x0) * np.cos(psi) + (yq - y0) * np.sin(psi)
+            tz = d - phantomC[2, nc] * s0[0, i] - phantomC[3, nc] * s0[1, i]
+            tz = tz / (-sinth[i] * phantomC[2, nc] + costh[i] * phantomC[3, nc])
+            equation2 = (xp - x0) * phantomC[2, nc] + (yp - y0) * phantomC[3, nc]
+            equation3 = (xq - x0) * phantomC[2, nc] + (yq - y0) * phantomC[3, nc]
             m1 = np.nonzero(equation3 >= d)
             tq[m1] = tz[m1]
             m2 = np.nonzero(equation2 >= d)
             tp[m2] = tz[m2]
+            nc += 1
 
         sinok = f * np.abs(tp - tq)
         sino[i] += sinok
@@ -190,9 +220,8 @@ def forbild_line_integral(theta, scoord):
     eps = 1e-10
     nc = 0
 
-    for k in phantomC[1]:
-        psi = k*np.pi/180
-        tmp = np.fabs(-sinth*np.cos(psi)+costh*np.sin(psi))
+    for k in range(phantomC.shape[1]):
+        tmp = np.fabs(-sinth*phantomC[2, k]+costh*phantomC[3, k])
         if tmp < eps: theta += eps
 
     sino = 0.0
@@ -213,8 +242,7 @@ def forbild_line_integral(theta, scoord):
 
         s0 = np.array([sx-x0, sy-y0])
 
-        DQ = np.array([[np.cos(phi) / a, np.sin(phi) / a], 
-                       [-np.sin(phi) / b, np.cos(phi) / b]])
+        DQ = np.array([[p[7], p[8]], [p[9], p[10]]])
         
         DQthp = DQ @ np.array([-sinth, costh])
         DQs0 = DQ @ s0
@@ -231,17 +259,16 @@ def forbild_line_integral(theta, scoord):
 
         for j in range(int(nclip)):
             d = phantomC[0, nc]
-            psi = phantomC[0, nc]
             nc += 1
             xp = sx - tp * sinth
             yp = sy + tp * costh
             xq = sx - tq * sinth
             yq = sy + tq * costh
-            tz = d - np.cos(psi) * s0[0] - np.sin(psi) * s0[1]
-            tz = tz / (-sinth * np.cos(psi) + costh * np.sin(psi))
-            if (xp - x0) * np.cos(psi) + (yp - y0) * np.sin(psi) >= d:
+            tz = d - phantomC[2, nc] * s0[0] - phantomC[3, nc] * s0[1]
+            tz = tz / (-sinth * phantomC[2, nc] + costh * phantomC[3, nc])
+            if (xp - x0) * phantomC[2, nc] + (yp - y0) * phantomC[3, nc] >= d:
                 tq = tz
-            if (xq - x0) * np.cos(psi) + (yq - y0) * np.sin(psi) >= d:
+            if (xq - x0) * phantomC[2, nc] + (yq - y0) * phantomC[3, nc] >= d:
                 tp = tz
 
         sinok = f * np.abs(tp - tq)
@@ -294,4 +321,6 @@ if __name__ == "__main__":
     du = 0.62
 
     sino = forbild_sinogram(nnp, nu, du, lsd, lso, True)
+
+    pickle.dump("FORBILD_sinogram.dat")
 
