@@ -163,7 +163,10 @@ int main(int argc, char *argv[]) {
 */
 
 int main() {
-    GeoData *geo = new GeoData(1, 1, 1, 500, 500, 360, 1, 1, 1, 0.01, 0.01);
+    cudaDeviceSetLimit(cudaLimitStackSize, 12928);
+    GeoData *geo = new GeoData(128, 128, 1, 256, 1, 360, 1, 1, 0, 0.75, 0);
+    //GeoData *geo = new GeoData(100, 100, 100, 500, 500, 360, 0.01, 0.01, 0.01, 0.01, 0.01);
+    //GeoData *geo = new GeoData(256, 256, 256, 500, 500, 360, 0.01, 0.01, 0.01, 0.0256, 0.0256);
     //GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
     geo->geo_init_example(11, 5, 0.0f, PI*2 * 359/360);
     //geo->geo_init_example(800, 600, 0.0f, PI);
@@ -212,7 +215,7 @@ int main() {
     x.copyHostToDevice();
 
     //Matrix y(256*510*525, 1);
-    Matrix y(geo->np * geo->nuv.x * geo->nuv.y, 1);
+    MatrixD y(geo->np * geo->nuv.x * geo->nuv.y, 1);
     y.allocateMemory();
     std::fill(y[0], y[geo->np * geo->nuv.x * geo->nuv.y], 0.0f);
     y.copyHostToDevice();
@@ -228,9 +231,7 @@ int main() {
 
     std::cerr<< "Finished Ref forward projection for 4 projs in " << duration.count() << " milliseconds." << std::endl;
 
-    y.copyDeviceToHost();
-
-    Matrix sy(geo->np * geo->nuv.x * geo->nuv.y, 1);
+    MatrixD sy(geo->np * geo->nuv.x * geo->nuv.y, 1);
     sy.allocateMemory();
     std::fill(sy[0], sy[geo->np * geo->nuv.x * geo->nuv.y], 0.0f);
     sy.copyHostToDevice();
@@ -244,8 +245,6 @@ int main() {
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
     std::cerr<< "Finished SF forward projection for 4 projs in " << duration.count() << " milliseconds." << std::endl;
-
-    sy.copyDeviceToHost();
 
     // float maxerr45 = 0.0f, maxerr22dot5 = 0.0f;
 

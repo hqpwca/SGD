@@ -6,7 +6,7 @@ SET(BUILD_MODE Debug)
 SET(CMAKE_CUDA_ARCHITECTURES 86)
 
 # Specify include directories
-add_library(network STATIC
+add_library(network SHARED
     network.cu
     network.hh
     layers/linear.cu
@@ -18,8 +18,10 @@ add_library(network STATIC
     layers/layer.hh
     layers/SF_projector.cu
     layers/SF_projector.hh
-    layers/Ref_projector.cu
     layers/Ref_projector.hh
+    layers/Ref_projector.cu
+    layers/Bilinear.cu
+    layers/Bilinear.hh
     utils/dataset.cu
     utils/dataset.hh
     utils/matrix.cu
@@ -40,12 +42,21 @@ target_compile_features(network PUBLIC cxx_std_14)
 set_target_properties( network
                         PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(network PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
+target_compile_options(network PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
+target_link_libraries(network PRIVATE -lcublas -fopenmp)
 
-add_executable(SGD SGD.cu)
+# add_executable(SGD SGD.cu)
 
-set_property(TARGET SGD 
+# set_property(TARGET SGD 
+#             PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+
+# target_compile_options(SGD PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
+# target_link_libraries(SGD PRIVATE network -lcublas -fopenmp)
+
+add_executable(Bilinear Bilinear.cu)
+
+set_property(TARGET Bilinear 
             PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(SGD PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
-target_link_libraries(SGD PRIVATE network -lcublas)
+target_compile_options(Bilinear PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
+target_link_libraries(Bilinear PRIVATE network -lcublas -fopenmp)

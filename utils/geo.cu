@@ -56,7 +56,7 @@ void invert3(double *m)
     for (i=0;i<9;i++) m[i] = n[i];
 }
 
-__host__ void generate_projection_matrix(float *pm, float *pmi, const float *src, const float *dtv, const float *puv, const float *pvv, const float uc, const float vc, const int3 n3xyz, const float3 d3xyz) {
+__host__ void generate_projection_matrix(double *pm, double *pmi, const double *src, const double *dtv, const double *puv, const double *pvv, const double uc, const double vc, const int3 n3xyz, const double3 d3xyz) {
     double vec[3];
     double k;
     double norm[3];
@@ -155,14 +155,14 @@ __host__ void generate_projection_matrix(float *pm, float *pmi, const float *src
     pmi[8] = dx*pm[8]; pmi[9] = dy*pm[9]; pmi[10] = dz*pm[10]; pmi[11] = pm[11] - ox*pm[8] - oy*pm[9] - oz*pm[10];
 }
 
-GeoData::GeoData(int nx, int ny, int nz, int nu, int nv, int np, float dx, float dy, float dz, float du, float dv) :
+GeoData::GeoData(int nx, int ny, int nz, int nu, int nv, int np, double dx, double dy, double dz, double du, double dv) :
     srcs(np, 3), puvs(np, 3), pvvs(np, 3), dtvs(np, 3), ucs(np, 1), vcs(np, 1), pms(np, 12), pmis(np, 12),
     lsds(np, 1), lsos(np, 1) {
     nxyz = make_int3(nx, ny, nz);
-    dxyz = make_float3(dx, dy, dz);
+    dxyz = make_double3(dx, dy, dz);
     this->np = np;
     nuv = make_int2(nu, nv);
-    duv = make_float2(du, dv);
+    duv = make_double2(du, dv);
 
     srcs.allocateHostMemory();
     puvs.allocateHostMemory();
@@ -195,19 +195,19 @@ void GeoData::initialize_projection_matrix() {
     pmis.copyHostToDevice();
 }
 
-void rotate(float *vec, float *res, double angle) {
+void rotate(double *vec, double *res, double angle) {
     res[0] = vec[0] * cos(angle) - vec[1] * sin(angle);
     res[1] = vec[0] * sin(angle) + vec[1] * cos(angle);
     res[2] = vec[2];
 }
 
-void GeoData::geo_init_example(float lsd, float lso,  float start_angle, float end_angle) {
-    float dangle = (end_angle - start_angle) / (np - 1);
+void GeoData::geo_init_example(double lsd, double lso,  double start_angle, double end_angle) {
+    double dangle = (end_angle - start_angle) / (np - 1);
 
-    float src[3] = {-lso, 0.0f, 0.0f};
-    float dtv[3] = {lsd-lso, 0.0f, 0.0f};
-    float puv[3] = {0.0f, duv.x, 0.0f};
-    float pvv[3] = {0.0f, 0.0f, duv.y};
+    double src[3] = {-lso, 0.0f, 0.0f};
+    double dtv[3] = {lsd-lso, 0.0f, 0.0f};
+    double puv[3] = {0.0f, duv.x, 0.0f};
+    double pvv[3] = {0.0f, 0.0f, duv.y};
 
     for(int i = 0; i < np; ++i) {
         double beta = start_angle + i * dangle;

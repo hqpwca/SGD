@@ -5,6 +5,7 @@
 #include <cuda_runtime.h>
 #include "layer.hh"
 #include "../utils/matrix.hh"
+#include "../utils/matrix_double.hh"
 #include "../utils/geo.hh"
 
 class SF : public Layer{
@@ -16,6 +17,7 @@ public:
     ~SF();
 
     void project(Matrix &vol, Matrix &proj, double weight, bool tt = false);
+    void project(Matrix &vol, MatrixD &proj, double weight, bool tt = false);
     void back_project(Matrix &vol, Matrix &proj, double weight, bool tt = false);
 
     Matrix& forward(cublasHandle_t &cublasH, Matrix &x); // x: (num_input, batch_size)

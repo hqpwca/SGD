@@ -10,50 +10,26 @@
 #include "SF_projector.hh"
 #include "../utils/exception.hh"
 
-__device__ static void sort2(float* a, float* b)
+template <class T>
+__device__ static void sort2(T* a, T* b)
 {
     if (*a > *b)
     {
-        float tmp = *b;
+        T tmp = *b;
         *b = *a;
         *a = tmp;
     }
 }
 
-__device__ static void sort4(float* a, float* b, float* c, float* d)
+template <class T>
+__device__ static void sort4(T* a, T* b, T* c, T* d)
 {
 
-    sort2(a,b);
-    sort2(c,d);
-    sort2(a,c);
-    sort2(b,d);
-    sort2(b,c);
-
-    // sort3
-    // sort2(b, c);
-    // sort2(a, b);
-    // sort2(b, c);
-
-}
-
-__device__ static void sort2(double* a, double* b)
-{
-    if (*a > *b)
-    {
-        double tmp = *b;
-        *b = *a;
-        *a = tmp;
-    }
-}
-
-__device__ static void sort4(double* a, double* b, double* c, double* d)
-{
-
-    sort2(a,b);
-    sort2(c,d);
-    sort2(a,c);
-    sort2(b,d);
-    sort2(b,c);
+    sort2<T>(a,b);
+    sort2<T>(c,d);
+    sort2<T>(a,c);
+    sort2<T>(b,d);
+    sort2<T>(b,c);
 
     // sort3
     // sort2(b, c);
@@ -105,7 +81,9 @@ __device__ static void gamma_calculate(float s1, float s2, float *us, float *gam
 }
 
 // block_size: (8, 8, 64) ILP on z-axis.
-__global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, double rect_rect_factor, int z_size, bool trap_v = false)
+
+template <class T>
+__global__ void SF_project(T proj, const float *vol, int3 n3xyz, double3 d3xyz, const double *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size, bool trap_v = false)
 {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -188,7 +166,7 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
             vs[2] = ( v2 + pm[6] * signz1 ) / ( v4 + pm[10] * signz1 );
             vs[3] = ( v2 + pm[6] * signz2 ) / ( v4 + pm[10] * signz2 );
 
-            sort4(vs, vs+1, vs+2, vs+3);
+            sort4<float>(vs, vs+1, vs+2, vs+3);
 
             min_v = ceilf(vs[0] - 0.5f);
             max_v = ceilf(vs[3] - 0.5f);
@@ -210,7 +188,7 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
 
         us[3] = ( u7 + pm[2]*iz ) / ( u8 + pm[10]*iz );
 
-        sort4(us, us+1, us+2, us+3);
+        sort4<float>(us, us+1, us+2, us+3);
 
         min_u = ceilf(us[0] - 0.5f);
         max_u = ceilf(us[3] - 0.5f);
@@ -260,7 +238,8 @@ __global__ void SF_project(float *proj, const float *vol, int3 n3xyz, float3 d3x
 }
 
 // block_size: (8, 8, 64) ILP on z-axis.
-__global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3 d3xyz, const float *pm, int nu, int nv, float3 src, double rect_rect_factor, int z_size)
+template <class T>
+__global__ void SF_backproject(T proj, float *vol, int3 n3xyz, double3 d3xyz, const double *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size)
 {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -336,7 +315,7 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 
         us[3] = ( u7 + pm[2]*iz ) / ( u8 + pm[10]*iz );
 
-        sort4(us, us+1, us+2, us+3);
+        sort4<float>(us, us+1, us+2, us+3);
 
         min_u = ceilf(us[0] - 0.5f);
         max_u = ceilf(us[3] - 0.5f);
@@ -383,15 +362,33 @@ __global__ void SF_backproject(const float *proj, float *vol, int3 n3xyz, float3
 
 void SF::project(Matrix &vol, Matrix &proj, double weight, bool tt) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
+        //if(p != 0 && p != 15 && p != 35 && p != 45) continue;
+
+        float lsd = *geodata->lsds[p];
+        double factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
+        //std::cout << p <<' ' << p * geodata->nuv.x * geodata->nuv.y << std::endl;
+
+        SF_project<float *> <<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
+                                      make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE, tt);
+        cudaDeviceSynchronize();
+
+        proj.copyDeviceToHost();
+    }
+}
+
+void SF::project(Matrix &vol, MatrixD &proj, double weight, bool tt) { // data processing on device
+    for(int p=0; p<geodata->np; p++) {
         if(p != 0 && p != 15 && p != 35 && p != 45) continue;
 
         float lsd = *geodata->lsds[p];
         double factor = lsd * lsd * geodata->dxyz.y * geodata->dxyz.z / (geodata->duv.x * geodata->duv.y);
         //std::cout << p <<' ' << p * geodata->nuv.x * geodata->nuv.y << std::endl;
 
-        SF_project<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
-                                      make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE, tt);
+        SF_project<double *> <<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
+                                      make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE, tt);
         cudaDeviceSynchronize();
+
+        proj.copyDeviceToHost();
     }
 }
 
@@ -400,8 +397,8 @@ void SF::back_project(Matrix &vol, Matrix &proj, double weight, bool tt) {
         float lsd = *geodata->lsds[p];
         double factor = lsd  * geodata->dxyz.x / (geodata->np);
 
-        SF_backproject<<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
-                                      make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);
+        SF_backproject<float *> <<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
+                                      make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]), factor, Z_SIZE);
         cudaDeviceSynchronize();
     }
 }
