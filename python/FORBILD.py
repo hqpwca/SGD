@@ -142,7 +142,7 @@ def _analytical_forbild_phantom(resolution, ear):
 
     return phantomE, phantomC
 
-phantomE, phantomC = _analytical_forbild_phantom(True, True)
+phantomE, phantomC = _analytical_forbild_phantom(False, True)
 
 @njit
 def sinogram(thetas, scoord):
@@ -309,18 +309,20 @@ def forbild_sinogram(nnp, nu, du, lsd, lso, beers_law = False):
                 sino[p][iu] = quad(forbild_line_quad, 0, 1, args=(su, du, lso, lsd, angles[p]))[0]
             print(p, iu, sino[p][iu], flush=True)
 
+    return sino
+
 if __name__ == "__main__":
     nx = 100
     ny = 100
     nnp = 128
-    nu = 128
+    nu = 320
     lsd = 78.125
     lso = 39.0625
     dx = 0.25
     dy = 0.25
-    du = 0.62
+    du = 0.25
 
     sino = forbild_sinogram(nnp, nu, du, lsd, lso, True)
 
-    pickle.dump("FORBILD_sinogram.dat")
+    pickle.dump(sino, open("FORBILD_sinogram.dat", 'wb'))
 
