@@ -145,7 +145,7 @@ def _analytical_forbild_phantom(resolution, ear):
 phantomE, phantomC = _analytical_forbild_phantom(True, True)
 
 @njit
-def sinogram(thetas, scoord):
+def batch_line_integral(thetas, scoord):
     sinth = np.sin(thetas)
     costh = np.cos(thetas)
 
@@ -304,10 +304,28 @@ def forbild_sinogram(nnp, nu, du, lsd, lso, beers_law = False):
         for iu in range(nu):
             su = - (nu*du) / 2 + iu*du
             if beers_law:
-                sino[p][iu] = np.log(quad(forbild_line_quad_beerslaw, 0, 1, args=(su, du, lso, lsd, angles[p]))[0])
+                sino[p][iu] = np.log(quad(forbild_line_quad_beerslaw, 0, 1, args=(su, du, lso, lsd, angles[p]), limit=10)[0])
             else:
-                sino[p][iu] = quad(forbild_line_quad, 0, 1, args=(su, du, lso, lsd, angles[p]))[0]
+                sino[p][iu] = quad(forbild_line_quad, 0, 1, args=(su, du, lso, lsd, angles[p]), limit=10)[0]
             print(p, iu, sino[p][iu], flush=True)
+    
+    return sino
+
+@njit
+def forbild_sinogram_noquad(nnp, nu, du, lsd, lso, beers_law = False):
+    sino = np.zeros((nnp, nu), dtype=np.float64)
+
+    angles = np.linspace(0, 2*np.pi, num=nnp, endpoint=False)
+    for p in range(nnp):
+        for iu in range(nu):
+            su = - (nu*du) / 2 + iu*du
+            if beers_law:
+                sino[p][iu] = 
+            else:
+                sino[p][iu] = 
+            print(p, iu, sino[p][iu], flush=True)
+    
+    return sino
 
 if __name__ == "__main__":
     nx = 100
@@ -322,5 +340,5 @@ if __name__ == "__main__":
 
     sino = forbild_sinogram(nnp, nu, du, lsd, lso, True)
 
-    pickle.dump("FORBILD_sinogram.dat")
+    pickle.dump(sino, open("FORBILD_sinogram.dat", 'rb'))
 

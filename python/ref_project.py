@@ -8,28 +8,6 @@ from numba import jit
 
 np.set_printoptions(threshold=sys.maxsize, precision=3, linewidth=10000)
 
-# lib = ctypes.DLL("../build/libnetwork.so")
-
-# line_integral = getattr(lib, 'lineInBox_pt')
-# line_integral.restype = ctypes.c_double
-
-# line_integral.argtypes = (ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float), 
-#                           ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float))
-
-# def target_function(x, y, src, cproj, du, dv, cbox, sbox):
-#     p = cproj + du * x + dv * y
-
-#     cbox = ctypes.cast(cbox.data.ptr, ctypes.POINTER(ctypes.c_float))
-#     sbox = ctypes.cast(sbox.data.ptr, ctypes.POINTER(ctypes.c_float))
-#     src = ctypes.cast(src.data.ptr, ctypes.POINTER(ctypes.c_float))
-#     p = ctypes.cast(p.data.ptr, ctypes.POINTER(ctypes.c_float))
-
-#     res = line_integral(src, p, cbox, sbox)
-
-# def quad_func():
-    
-#     dblquad(target_function, -0.5, 0.5, -0.5, 0.5, (src, cproj, du, dv, cbox, sbox, ))
-
 @jit(nopython = True)
 def line_in_square(px, py, sx, sy, xmin, ymin, xmax, ymax):
     eps = 1e-9
