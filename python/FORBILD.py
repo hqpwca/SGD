@@ -327,8 +327,6 @@ def forbild_sinogram_noquad(nnp, nu, du, lsd, lso, beers_law = False):
     
     return sino
 
-    return sino
-
 if __name__ == "__main__":
     nx = 100
     ny = 100
