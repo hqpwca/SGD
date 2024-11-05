@@ -26,8 +26,8 @@ def _analytical_forbild_phantom(resolution, ear):
     a16b = 0.443194085308632
     b16b = 3.892760834372886
 
-    E = [[-4.7, 4.3, 1.79989, 1.79989, 0, 0.010, 0],  # 1
-         [4.7, 4.3, 1.79989, 1.79989, 0, 0.010, 0],  # 2
+    E = [[-4.7, 4.3, 1.79989, 1.79989, 0, 0.110, 0],  # 1
+         [4.7, 4.3, 1.79989, 1.79989, 0, 0.110, 0],  # 2
          [-1.08, -9, 0.4, 0.4, 0, 0.0025, 0],  # 3
          [1.08, -9, 0.4, 0.4, 0, -0.0025, 0],  # 4
          [0, 0, 9.6, 12, 0, 1.800, 0],  # 5
@@ -131,7 +131,7 @@ def _analytical_forbild_phantom(resolution, ear):
 
     newC.append(C[0])
     new_angle = np.array(C[1]) * np.pi / 180
-    newC.append(new_angle)
+    newC.append(C[1])
     newC.append(np.cos(new_angle))
     newC.append(np.sin(new_angle))
 
@@ -143,6 +143,35 @@ def _analytical_forbild_phantom(resolution, ear):
     return phantomE, phantomC
 
 phantomE, phantomC = _analytical_forbild_phantom(False, True)
+
+def discrete_phantom(xcoord, ycoord):
+    image = np.zeros(xcoord.shape)
+    nclipinfo = 0
+
+    # Loop over each row in phantomE
+    for k in range(phantomE.shape[0]):
+        Vx0 = np.array([xcoord.ravel() - phantomE[k, 0], ycoord.ravel() - phantomE[k, 1]])
+        D = np.array([[1 / phantomE[k, 2], 0], [0, 1 / phantomE[k, 3]]])
+        phi = phantomE[k, 4] * np.pi / 180
+        Q = np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+        f = phantomE[k, 5]
+        nclip = int(phantomE[k, 6])
+
+        # Calculate the ellipse equation and find indices inside the ellipse
+        equation1 = np.sum((D @ Q @ Vx0)**2, axis=0)
+        i = np.where(equation1 <= 1.0)[0]
+
+        # Handle clipping if nclip > 0
+        if nclip > 0:
+            for j in range(nclip):
+                nclipinfo += 1
+                d = phantomC[0, nclipinfo - 1]
+                equation2 = np.dot([phantomC[2, nclipinfo - 1], phantomC[3, nclipinfo - 1]], Vx0)
+                i = i[np.where(equation2[i] < d)]
+
+        image.ravel()[i] += f
+
+    return image
 
 @njit
 def batch_line_integral(thetas, scoord):
@@ -311,32 +340,37 @@ def forbild_sinogram(nnp, nu, du, lsd, lso, beers_law = False):
     
     return sino
 
-@njit
-def forbild_sinogram_noquad(nnp, nu, du, lsd, lso, beers_law = False):
+def forbild_sinogram_noquad(nnp, nu, du, lsd, lso, num_sample = 1, beers_law = False):
     sino = np.zeros((nnp, nu), dtype=np.float64)
 
-    angles = np.linspace(0, 2*np.pi, num=nnp, endpoint=False)
-    for p in range(nnp):
-        for iu in range(nu):
-            su = - (nu*du) / 2 + iu*du
-            if beers_law:
-                sino[p][iu] = 
-            else:
-                sino[p][iu] = 
-            print(p, iu, sino[p][iu], flush=True)
+    angles = np.linspace(0, 2*np.pi, num=nnp, endpoint=False, dtype=np.float64)
+    u = (np.arange(nu*num_sample) * du / num_sample)
+    uc = np.ones((nnp, 1)) * u
+    anglesc = angles[:, None] * np.ones((1, nu))
+    scoords = lso * uc / np.sqrt(lsd**2 + uc**2)
+    theta = anglesc + np.pi / 2 + np.arctan(uc / lsd)
+
+
+            # su = - (nu*du) / 2 + iu*du
+            # if beers_law:
+            #     sino[p][iu] = forbild_line_quad_beerslaw(0.5, su, du, lso, lsd, angles[p])
+            # else:
+            #     sino[p][iu] = forbild_line_quad(0.5, su, du, lso, lsd, angles[p])
+            # print(p, iu, sino[p][iu], flush=True)
     
     return sino
+
 
 if __name__ == "__main__":
     nx = 100
     ny = 100
     nnp = 128
-    nu = 320
+    nu = 128
     lsd = 78.125
     lso = 39.0625
     dx = 0.25
     dy = 0.25
-    du = 0.25
+    du = 0.62
 
     sino = forbild_sinogram(nnp, nu, du, lsd, lso, True)
 
