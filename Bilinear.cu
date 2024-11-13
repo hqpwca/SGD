@@ -12,7 +12,7 @@
 #include "cublas_v2.h"
 
 #include "network.hh"
-#include "layers/Bilinear.hh"
+#include "layers/A_B1.hh"
 #include "layers/Ref_projector.hh"
 #include "utils/geo.hh"
 
@@ -22,8 +22,8 @@ int main() {
     GeoData *geo = new GeoData(100, 100, 1, 855, 1, 180, 1, 1, 0, 0.78125, 0);
     geo->geo_init_example(156.25, 78.125, 0.0f, PI*2 * 179/180);
 
-    Bilinear *bl_layer = new Bilinear(geo);
-    Matrix x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
+    A_B1 *bl_layer = new A_B1(geo);
+    MatrixD x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
     x.allocateMemory();
     std::fill(x[0], x[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x], 1.0f);
     x.copyHostToDevice();
@@ -43,20 +43,20 @@ int main() {
 
     y.copyDeviceToHost();
 
-    std::cerr<< "Finished Bilinear forward projection for 16 projs in " << duration.count() << " milliseconds." << std::endl;
+    std::cerr<< "Finished Bilinear forward projection for 180 projs in " << duration.count() << " milliseconds." << std::endl;
 
     int nu = geo->nuv.x;
     int nv = geo->nuv.y;
     int np = geo->np;
 
-    for (int j=0; j<np; ++j) {
-        double m1 = *std::max_element(y[j*nu], y[(j+1)*nu]);
+    // for (int j=0; j<np; ++j) {
+    //     double m1 = *std::max_element(y[j*nu], y[(j+1)*nu]);
 
-        for (int i=0; i<geo->nuv.x; ++i) {
-            std::cout << *y[geo->nuv.x*j + i] / m1 << ' ';
-        }
-        std::cout << std::endl;
-    }
+    //     for (int i=0; i<geo->nuv.x; ++i) {
+    //         std::cout << *y[geo->nuv.x*j + i] / m1 << ' ';
+    //     }
+    //     std::cout << std::endl;
+    // }
 
     //delete geo;
     //delete geo2;

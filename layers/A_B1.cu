@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
 
-#include "Bilinear.hh"
+#include "A_B1.hh"
 #include "../utils/geo.hh"
 #include "../utils/matrix_double.hh"
 #include "../utils/exception.hh"
@@ -43,13 +43,14 @@ __device__ static double linear_convolution_1d(double y, double h1, double h2, d
 }
 
 // Fan Beam only
-__global__ void bilinear_forward_projection(double *proj, const float *vol, int3 n3xyz, double3 d3xyz, int nu, double3 src, double3 puv, double3 dtv) { // nz = 1, dz = 0, src.z = 0
-    //int ip = (blockIdx.x * blockDim.x) + threadIdx.x;
-    int iu = (blockIdx.x * blockDim.x) + threadIdx.x;
+__global__ void bilinear_forward_projection(double *proj, const double *vol, int3 n3xyz, double3 d3xyz, int nu, double3 src, double3 puv, double3 dtv) { // nz = 1, dz = 0, src.z = 0
+
+        int iu = (blockIdx.x * blockDim.x) + threadIdx.x;
 
     if (iu >= nu) return;
 
     int nx, ny;
+    int row;
     double nx2, ny2;
     double dx, dy;
     int i, j;
@@ -59,12 +60,12 @@ __global__ void bilinear_forward_projection(double *proj, const float *vol, int3
     double theta, sint, cost;
     double vx, vy, vblur, y;
 
-    double V = 0.0f;
-
     nx = n3xyz.x, ny = n3xyz.y;
     nx2 = 0.5 * (nx-1), ny2 = 0.5 * (ny-1);
     dx = d3xyz.x, dy = d3xyz.y;
     px = src.x, py = src.y;
+
+    double V = 0.0, sum = 0.0;
     
     sx = dtv.x + puv.x * (iu - 0.5 * nu + 0.5);
     sy = dtv.y + puv.y * (iu - 0.5 * nu + 0.5);
@@ -77,12 +78,12 @@ __global__ void bilinear_forward_projection(double *proj, const float *vol, int3
     sint = sin(theta), cost = cos(theta);
     vx = dx * cost, vy = dy * sint;
     
-    double sum = 0.0;
     // TODO: optimize the range of j
     for(i = 0; i < nx; ++i) {
         for(j = 0; j < ny; ++j) {
             ox = (i-nx2) * dx;
             oy = (j-ny2) * dy;
+            row = i*ny + j;
 
             double ra = ((ox-px)*(sx-px) + (oy-py)*(sy-py)) / ((ax-px)*(sx-px) + (ay-py)*(sy-py));
             double rb = ((ox-px)*(sx-px) + (oy-py)*(sy-py)) / ((bx-px)*(sx-px) + (by-py)*(sy-py));
@@ -90,7 +91,9 @@ __global__ void bilinear_forward_projection(double *proj, const float *vol, int3
             double bx1 = px + (bx-px) * rb, by1 = py + (by-py) * rb;
             //y = fabs((sy-py)*ox - (sx-px)*oy + sx*py - sy*px) / sqrtf64((sx-px)*(sx-px) + (sy-py)*(sy-py));
 
-            //printf("[Slot %d %d %d] ra: %lf, rb: %lf, s:(%lf %lf), p:(%lf, %lf), o:(%lf %lf), a:(%lf %lf), b:(%lf %lf), a1:(%lf %lf), b1:(%lf %lf)\n", iu, i, j, ra, rb, sx, sy, px, py, ox, oy, ax, ay, bx, by, ax1, ay1, bx1, by1);
+#ifdef DEBUG
+            printf("[Slot %d %d %d] ra: %lf, rb: %lf, s:(%lf %lf), p:(%lf, %lf), o:(%lf %lf), a:(%lf %lf), b:(%lf %lf), a1:(%lf %lf), b1:(%lf %lf)\n", iu, i, j, ra, rb, sx, sy, px, py, ox, oy, ax, ay, bx, by, ax1, ay1, bx1, by1);
+#endif
 
             if (fabs(ax1-ox) > dx && fabs(bx1-ox) > dx && fabs(ay1-oy) > dy && fabs(by1-oy) > dy)
                 continue;
@@ -98,19 +101,28 @@ __global__ void bilinear_forward_projection(double *proj, const float *vol, int3
             vblur = sqrt((bx1-ax1) * (bx1-ax1) + (by1-ay1) * (by1-ay1));
             y = sqrt((ax1-ox) * (ax1-ox) + (ay1-oy) * (ay1-oy));
 
+            if (y > 2 * fabs(vx) + 2 * fabs(vy) + fabs(vblur))
+                continue;
+
             if((ay-py) * (ox-px) > (oy-py) * (ax-px)) 
                 y = -y;
 
             double conv = linear_convolution_1d(y, vx, -vx, vy, -vy, vblur);
 
-            //printf("[Conv %d %d %d] theta: %lf, vx: %lf, vy: %lf, vblur: %lf, y: %lf, conv: %lf\n", iu, i, j, theta, vx, vy, vblur, y, conv);
-
+#ifdef DEBUG
+            printf("[Conv %d %d %d] theta: %.12lf, vx: %.12lf, vy: %.12lf, vblur: %.12lf, y: %.12lf, conv: %lf\n", iu, i, j, theta, vx, vy, vblur, y, conv);
+#endif
             V = vol[j*nx + i] * conv;
 
             sum += V;
         }
     }
+
     proj[iu] = sum;
+}
+
+__global__ void bilinear_backward_projection(const double *proj, double *vol, int3 n3xyz, double3 d3xyz, int nu, double3 src, double3 puv, double3 dtv) {
+
 }
 
 __global__ void bilinear_matrix_generate(double *mat, int3 n3xyz, double3 d3xyz, int nu, double3 src, double3 puv, double3 dtv) { // nz = 1, dz = 0, src.z = 0
@@ -187,11 +199,7 @@ __global__ void bilinear_matrix_generate(double *mat, int3 n3xyz, double3 d3xyz,
     }
 }
 
-__global__ void bilinear_backward_projection() {
-
-}
-
-Bilinear::Bilinear(GeoData *geo) {
+A_B1::A_B1(GeoData *geo) {
     geodata = geo;
 
 #ifdef DEBUG
@@ -203,11 +211,11 @@ Bilinear::Bilinear(GeoData *geo) {
     nblock = (geo->nuv.x + (ngrid-1)) / ngrid;
 }
 
-Bilinear::~Bilinear() {
+A_B1::~A_B1() {
 
 }
 
-void Bilinear::project(Matrix &vol, MatrixD &proj, double weight) {
+void A_B1::project(MatrixD &vol, MatrixD &proj, double weight) {
     for(int p=0; p<geodata->np; p++){
 
 #ifdef DEBUG
@@ -222,17 +230,19 @@ void Bilinear::project(Matrix &vol, MatrixD &proj, double weight) {
     }
 }
 
-void Bilinear::back_project(Matrix &vol, Matrix &proj, double weight) {
+void A_B1::back_project(MatrixD &vol, MatrixD &proj, double weight) {
+    for(int p=0; p<geodata->np; p++){
 
-}
+#ifdef DEBUG
+        std::cout << p << std::endl;
+#endif
 
-void Bilinear::project(Matrix &vol, Matrix &proj, double weight) {
-}
-
-Matrix& Bilinear::forward(cublasHandle_t &cublasH, Matrix &x) {
-}
-
-Matrix& Bilinear::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr) {
+        bilinear_forward_projection<<<ngrid, nblock>>>(proj(int(p * geodata->nuv.x)), vol(0), geodata->nxyz, geodata->dxyz, geodata->nuv.x,
+                                                        make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
+                                                        make_double3(*geodata->puvs[p*3], *geodata->puvs[p*3+1], *geodata->puvs[p*3+2]),
+                                                        make_double3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]));
+        cudaDeviceSynchronize();
+    }
 }
 
 extern "C" {
