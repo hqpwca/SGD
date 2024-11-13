@@ -18,6 +18,8 @@ add_library(network SHARED
     layers/layer.hh
     layers/SF_projector.cu
     layers/SF_projector.hh
+    layers/Pixel.cu
+    layers/Hexagon.cu
     layers/Ref_projector.hh
     layers/Ref_projector.cu
     layers/Bilinear.cu

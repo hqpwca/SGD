@@ -19,8 +19,8 @@
 #define BATCH_SIZE 256
 
 int main() {
-    GeoData *geo = new GeoData(10, 10, 1, 128, 1, 16, 0.1, 0.1, 0, 0.025, 0);
-    geo->geo_init_example(11, 5, 0.0f, PI*2 * 15/16);
+    GeoData *geo = new GeoData(100, 100, 1, 855, 1, 180, 1, 1, 0, 0.78125, 0);
+    geo->geo_init_example(156.25, 78.125, 0.0f, PI*2 * 179/180);
 
     Bilinear *bl_layer = new Bilinear(geo);
     Matrix x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);

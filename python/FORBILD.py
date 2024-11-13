@@ -1,13 +1,18 @@
-import sys
-import ctypes
 # import cupy as cp
+import sys
 import numpy as np
 
 import pickle
 
-from scipy.integrate import *
+from scipy import LowLevelCallable
+from scipy.io import loadmat
+from scipy.integrate import quad
 
+import numba as nb
 from numba import jit, njit
+from numba import cfunc, carray
+
+np.set_printoptions(threshold=sys.maxsize, precision=3, linewidth=10000, suppress=True)
 
 # https://pmc.ncbi.nlm.nih.gov/articles/PMC3426508/#APP1
 
@@ -26,8 +31,8 @@ def _analytical_forbild_phantom(resolution, ear):
     a16b = 0.443194085308632
     b16b = 3.892760834372886
 
-    E = [[-4.7, 4.3, 1.79989, 1.79989, 0, 0.110, 0],  # 1
-         [4.7, 4.3, 1.79989, 1.79989, 0, 0.110, 0],  # 2
+    E = [[-4.7, 4.3, 1.79989, 1.79989, 0, 0.010, 0],  # 1
+         [4.7, 4.3, 1.79989, 1.79989, 0, 0.010, 0],  # 2
          [-1.08, -9, 0.4, 0.4, 0, 0.0025, 0],  # 3
          [1.08, -9, 0.4, 0.4, 0, -0.0025, 0],  # 4
          [0, 0, 9.6, 12, 0, 1.800, 0],  # 5
@@ -65,11 +70,13 @@ def _analytical_forbild_phantom(resolution, ear):
     E_cavity = np.hstack((cavity1, cavity2, cavity3_7))
 
     # generate the left ear (resolution pattern)
+    r = 3.0
+
     x0 = -7.0
     y0 = -1.0
-    d0_xy = 0.04
+    d0_xy = 0.04 * r
 
-    d_xy = [0.0357, 0.0312, 0.0278, 0.0250]
+    d_xy = [0.0357*r, 0.0312*r, 0.0278*r, 0.0250*r]
     ab = 0.5 * np.ones([5, 1]) * d_xy
     ab = ab.T.ravel()[:, None] * np.ones([1, 4])
     abr = ab.T.ravel()[:, None]
@@ -111,17 +118,18 @@ def _analytical_forbild_phantom(resolution, ear):
 
     new_phantomE = []
     for p in phantomE:
-        x0 = p[0]
-        y0 = p[1]
-        a = p[2]
-        b = p[3]
+        x0 = p[0] * 4
+        y0 = p[1] * 4
+        a = p[2] * 4
+        b = p[3] * 4
         phi = p[4]*np.pi/180
         f = p[5]
         nclip = p[6]
 
         DQ = np.array([np.cos(phi) / a, np.sin(phi) / a, -np.sin(phi) / b, np.cos(phi) / b])
         
-        pl = np.append(p, DQ)
+        p1 = np.array([x0, y0, a, b, p[4], f, nclip])
+        pl = np.append(p1, DQ)
 
         new_phantomE.append(pl)
 
@@ -129,7 +137,7 @@ def _analytical_forbild_phantom(resolution, ear):
 
     newC = []
 
-    newC.append(C[0])
+    newC.append(C[0]*4)
     new_angle = np.array(C[1]) * np.pi / 180
     newC.append(C[1])
     newC.append(np.cos(new_angle))
@@ -142,7 +150,7 @@ def _analytical_forbild_phantom(resolution, ear):
 
     return phantomE, phantomC
 
-phantomE, phantomC = _analytical_forbild_phantom(False, True)
+phantomE, phantomC = _analytical_forbild_phantom(True, True)
 
 def discrete_phantom(xcoord, ycoord):
     image = np.zeros(xcoord.shape)
@@ -241,18 +249,21 @@ def batch_line_integral(thetas, scoord):
 
     return sino.reshape(thetas.shape)
 
-@njit(parallel = True)
+@njit
 def forbild_line_integral(theta, scoord):
     sinth = np.sin(theta)
     costh = np.cos(theta)
 
     eps = 1e-10
     nc = 0
+    mask = 0
 
     for k in range(phantomC.shape[1]):
         tmp = np.fabs(-sinth*phantomC[2, k]+costh*phantomC[3, k])
-        if tmp < eps: theta += eps
+        if tmp < eps: mask = eps
 
+    theta += mask
+    
     sino = 0.0
     sinth = np.sin(theta)
     costh = np.cos(theta)
@@ -260,13 +271,15 @@ def forbild_line_integral(theta, scoord):
     sx = scoord * costh
     sy = scoord * sinth
 
-    for p in phantomE:
+    for k in range(phantomE.shape[0]):
+        p = phantomE[k]
+
         x0 = p[0]
         y0 = p[1]
         a = p[2]
         b = p[3]
         phi = p[4]*np.pi/180
-        f = p[5]
+        f = p[5] / 10
         nclip = p[6]
 
         s0 = np.array([sx-x0, sy-y0])
@@ -276,37 +289,47 @@ def forbild_line_integral(theta, scoord):
         DQthp = DQ @ np.array([-sinth, costh])
         DQs0 = DQ @ s0
 
-        A = np.sum(DQthp**2, axis=0)
-        B = 2 * np.sum(DQthp * DQs0, axis=0)
-        C = np.sum(DQs0**2, axis=0) - 1
+        A = np.sum(DQthp**2)
+        B = 2 * np.sum(DQthp * DQs0)
+        C = np.sum(DQs0**2) - 1
 
         equation = B**2 - 4 * A * C
-        if equation < 0: continue;
+        if equation < 0:
+            nc += int(nclip)
+            continue
         
         tp = 0.5 * (-B + np.sqrt(equation)) / A
         tq = 0.5 * (-B - np.sqrt(equation)) / A
 
         for j in range(int(nclip)):
             d = phantomC[0, nc]
-            nc += 1
             xp = sx - tp * sinth
             yp = sy + tp * costh
             xq = sx - tq * sinth
             yq = sy + tq * costh
             tz = d - phantomC[2, nc] * s0[0] - phantomC[3, nc] * s0[1]
             tz = tz / (-sinth * phantomC[2, nc] + costh * phantomC[3, nc])
+            # print(np.array([d, xp, yp, xq, yq, tz]))
             if (xp - x0) * phantomC[2, nc] + (yp - y0) * phantomC[3, nc] >= d:
-                tq = tz
-            if (xq - x0) * phantomC[2, nc] + (yq - y0) * phantomC[3, nc] >= d:
                 tp = tz
+            if (xq - x0) * phantomC[2, nc] + (yq - y0) * phantomC[3, nc] >= d:
+                tq = tz
+            nc += 1
 
-        sinok = f * np.abs(tp - tq)
+        sinok = f * np.fabs(tp - tq)
+
+        # print(k, np.array([tp, tq, nc]))
         sino += sinok
 
     return sino
 
-@njit
-def forbild_line_quad(x, su, du, lso, lsd, la):
+c_sig = nb.types.double(nb.types.int32, nb.types.CPointer(nb.types.double))
+
+@cfunc(c_sig)
+def forbild_line_quad(n, args):
+    arg = carray(args, (n,), dtype = np.double)
+    x, su, du, lso, lsd, la = arg
+
     u = su + x * du
 
     theta = la + np.pi/2 + np.arctan2(u, lsd)
@@ -314,17 +337,19 @@ def forbild_line_quad(x, su, du, lso, lsd, la):
 
     return forbild_line_integral(theta, scoord)
 
-@njit
-def forbild_line_quad_beerslaw(x, su, du, lso, lsd, la):
+@cfunc(c_sig)
+def forbild_line_quad_beerslaw(n, args):
+    arg = carray(args, (n,), dtype = np.double)
+    x, su, du, lso, lsd, la = arg
+
     u = su + x * du
 
     theta = la + np.pi/2 + np.arctan2(u, lsd)
     scoord = u * lso / np.sqrt(lsd**2 + u**2)
 
     return np.exp(forbild_line_integral(theta, scoord))
-    
 
-@jit(forceobj = True, looplift=True)
+
 def forbild_sinogram(nnp, nu, du, lsd, lso, beers_law = False):
     sino = np.zeros((nnp, nu), dtype=np.float64)
 
@@ -333,9 +358,9 @@ def forbild_sinogram(nnp, nu, du, lsd, lso, beers_law = False):
         for iu in range(nu):
             su = - (nu*du) / 2 + iu*du
             if beers_law:
-                sino[p][iu] = np.log(quad(forbild_line_quad_beerslaw, 0, 1, args=(su, du, lso, lsd, angles[p]), limit=10)[0])
+                sino[p][iu] = np.log(quad(LowLevelCallable(forbild_line_quad_beerslaw.ctypes), 0, 1, args=(su, du, lso, lsd, angles[p]))[0])
             else:
-                sino[p][iu] = quad(forbild_line_quad, 0, 1, args=(su, du, lso, lsd, angles[p]), limit=10)[0]
+                sino[p][iu] = quad(LowLevelCallable(forbild_line_quad.ctypes), 0, 1, args=(su, du, lso, lsd, angles[p]))[0]
             print(p, iu, sino[p][iu], flush=True)
     
     return sino
@@ -361,18 +386,22 @@ def forbild_sinogram_noquad(nnp, nu, du, lsd, lso, num_sample = 1, beers_law = F
     return sino
 
 
+
 if __name__ == "__main__":
     nx = 100
     ny = 100
-    nnp = 128
-    nu = 128
-    lsd = 78.125
-    lso = 39.0625
-    dx = 0.25
-    dy = 0.25
-    du = 0.62
+    nnp = 180
+    nu = 855
+    lsd = 156.25
+    lso = 78.125
+    dx = 1
+    dy = 1
+    du = 0.78125
 
+    # print(phantomC)
+    # print(forbild_line_integral(0, 0))
+    
     sino = forbild_sinogram(nnp, nu, du, lsd, lso, True)
 
-    pickle.dump(sino, open("FORBILD_sinogram.dat", 'wb'))
+    np.save(open("FORBILD_sinogram.dat", 'wb'), sino)
 

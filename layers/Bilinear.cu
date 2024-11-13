@@ -11,67 +11,13 @@
 #include "../utils/matrix_double.hh"
 #include "../utils/exception.hh"
 
-__device__ double base_function_5x(double y)
-{
-    if(y > 0) return y*y*y*y;
-    else return 0;
-}
+#include "spline_conv.hh"
 
-__device__ double base_function_3x(double y)
-{
-    if(y > 0) return y*y;
-    else return 0;
-}
+#include "quadmath.h"
 
-__device__ double forward_difference_3x_3(double y, double h) {
-    double res;
-    res = base_function_3x(y) - base_function_3x(y-h);
-    return res/h;
-}
+// #define DEBUG
 
-__device__ double forward_difference_3x_2(double y, double h, double h2) {
-    double res;
-    res = forward_difference_3x_3(y, h) - forward_difference_3x_3(y-h2, h);
-    return res/h2;
-}
-
-__device__ double forward_difference_3x_1(double y, double h, double h2, double h3) {
-    double res;
-    res = forward_difference_3x_2(y, h, h2) - forward_difference_3x_2(y-h3, h, h2);
-    return res/h3;
-}
-
-__device__ double forward_difference_5x_5(double y, double h) {
-    double res;
-    res = base_function_5x(y) - base_function_5x(y-h);
-    return res/h;
-}
-
-__device__ double forward_difference_5x_4(double y, double h, double h2) {
-    double res;
-    res = forward_difference_5x_5(y, h) - forward_difference_5x_5(y-h2, h);
-    return res/h2;
-}
-
-__device__ double forward_difference_5x_3(double y, double h, double h2, double h3) {
-    double res;
-    res = forward_difference_5x_4(y, h, h2) - forward_difference_5x_4(y-h3, h, h2);
-    return res/h3;
-}
-
-__device__ double forward_difference_5x_2(double y, double h, double h2, double h3, double h4) {
-    double res;
-    res = forward_difference_5x_3(y, h, h2, h3) - forward_difference_5x_3(y-h4, h, h2, h3);
-    return res/h4;
-}
-
-__device__ double forward_difference_5x_1(double y, double h, double h2, double h3, double h4, double h5) {
-    double res;
-    res = forward_difference_5x_2(y, h, h2, h3, h4) - forward_difference_5x_2(y-h5, h, h2, h3, h4);
-    return res/h5;
-}
-
-__device__ double linear_convolution_1d(double y, double h1, double h2, double h3, double h4, double h5) 
+__device__ static double linear_convolution_1d(double y, double h1, double h2, double h3, double h4, double h5) 
 {
     int tot = 0;
     double hs[5];
@@ -213,7 +159,9 @@ __global__ void bilinear_matrix_generate(double *mat, int3 n3xyz, double3 d3xyz,
             double bx1 = px + (bx-px) * rb, by1 = py + (by-py) * rb;
             //y = fabs((sy-py)*ox - (sx-px)*oy + sx*py - sy*px) / sqrtf64((sx-px)*(sx-px) + (sy-py)*(sy-py));
 
-            //printf("[Slot %d %d %d] ra: %lf, rb: %lf, s:(%lf %lf), p:(%lf, %lf), o:(%lf %lf), a:(%lf %lf), b:(%lf %lf), a1:(%lf %lf), b1:(%lf %lf)\n", iu, i, j, ra, rb, sx, sy, px, py, ox, oy, ax, ay, bx, by, ax1, ay1, bx1, by1);
+#ifdef DEBUG
+            printf("[Slot %d %d %d] ra: %lf, rb: %lf, s:(%lf %lf), p:(%lf, %lf), o:(%lf %lf), a:(%lf %lf), b:(%lf %lf), a1:(%lf %lf), b1:(%lf %lf)\n", iu, i, j, ra, rb, sx, sy, px, py, ox, oy, ax, ay, bx, by, ax1, ay1, bx1, by1);
+#endif
 
             if (fabs(ax1-ox) > dx && fabs(bx1-ox) > dx && fabs(ay1-oy) > dy && fabs(by1-oy) > dy)
                 continue;
@@ -221,14 +169,20 @@ __global__ void bilinear_matrix_generate(double *mat, int3 n3xyz, double3 d3xyz,
             vblur = sqrt((bx1-ax1) * (bx1-ax1) + (by1-ay1) * (by1-ay1));
             y = sqrt((ax1-ox) * (ax1-ox) + (ay1-oy) * (ay1-oy));
 
+            if (y > 2 * fabs(vx) + 2 * fabs(vy) + fabs(vblur))
+                continue;
+
             if((ay-py) * (ox-px) > (oy-py) * (ax-px)) 
                 y = -y;
 
             double conv = linear_convolution_1d(y, vx, -vx, vy, -vy, vblur);
 
-            //printf("[Conv %d %d %d] theta: %lf, vx: %lf, vy: %lf, vblur: %lf, y: %lf, conv: %lf\n", iu, i, j, theta, vx, vy, vblur, y, conv);
+#ifdef DEBUG
+            printf("[Conv %d %d %d] theta: %.12lf, vx: %.12lf, vy: %.12lf, vblur: %.12lf, y: %.12lf, conv: %lf\n", iu, i, j, theta, vx, vy, vblur, y, conv);
+#endif
 
-            mat[iu*nx*ny + row] = conv;
+            if(conv > 0)
+                mat[iu*nx*ny + row] = conv;
         }
     }
 }
@@ -240,7 +194,12 @@ __global__ void bilinear_backward_projection() {
 Bilinear::Bilinear(GeoData *geo) {
     geodata = geo;
 
-    ngrid = 1;
+#ifdef DEBUG
+    ngrid = 10;
+#else
+    ngrid = 16;
+#endif
+
     nblock = (geo->nuv.x + (ngrid-1)) / ngrid;
 }
 
@@ -250,18 +209,12 @@ Bilinear::~Bilinear() {
 
 void Bilinear::project(Matrix &vol, MatrixD &proj, double weight) {
     for(int p=0; p<geodata->np; p++){
-        bilinear_forward_projection<<<ngrid, nblock>>>(proj(int(p * geodata->nuv.x)), vol(0), geodata->nxyz, geodata->dxyz, geodata->nuv.x,
-                                                        make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
-                                                        make_double3(*geodata->puvs[p*3], *geodata->puvs[p*3+1], *geodata->puvs[p*3+2]),
-                                                        make_double3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]));
-        cudaDeviceSynchronize();
-        //std::cout << p << std::endl;
-    }
-}
 
-void Bilinear::matrix(MatrixD &mat) {
-    for(int p=0; p<geodata->np; p++){
-        bilinear_matrix_generate<<<ngrid, nblock>>>(mat(p*geodata->nuv.x*geodata->nxyz.x*geodata->nxyz.y), geodata->nxyz, geodata->dxyz, geodata->nuv.x,
+#ifdef DEBUG
+        std::cout << p << std::endl;
+#endif
+
+        bilinear_forward_projection<<<ngrid, nblock>>>(proj(int(p * geodata->nuv.x)), vol(0), geodata->nxyz, geodata->dxyz, geodata->nuv.x,
                                                         make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                                         make_double3(*geodata->puvs[p*3], *geodata->puvs[p*3+1], *geodata->puvs[p*3+2]),
                                                         make_double3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]));
@@ -283,27 +236,53 @@ Matrix& Bilinear::back_prop(cublasHandle_t &cublasH, Matrix &od, float lr) {
 }
 
 extern "C" {
-    void bilinear_matrix_generation(int np, int nu, int nx, int ny, double dx, double dy, double du, double lsd, double lso, double *nmat) {
+    int bilinear_matrix_generation(int np, int nu, int nx, int ny, double dx, double dy, double du, double lsd, double lso, double *spmat, int buffer_size) {
         GeoData *geo = new GeoData(nx, ny, 1, nu, 1, np, dx, dy, 0, du, 0);
         geo->geo_init_example(lsd, lso, 0.0f, PI*2 * (np-1)/np);
 
-        int row = geo->nxyz.y * geo->nxyz.x;
-        int col = geo->np * geo->nuv.x;
+        int ngrid = 16;
 
-        Bilinear *bl_layer = new Bilinear(geo);
+        int nblock = (geo->nuv.x + (ngrid-1)) / ngrid;
 
-        MatrixD mat(row, col);
+        MatrixD mat(nu, nx*ny);
         mat.allocateMemory();
-        std::fill(mat[0], mat[row*col], 0.0);
-        mat.copyHostToDevice();
 
-        bl_layer->matrix(mat);
+        int idx = 0;
 
-        mat.copyDeviceToHost();
+        for(int p=0; p<np; p++){
 
-        memcpy(nmat, mat[0], row*col*sizeof(double));
+#ifdef DEBUG
+            std::cout << p << std::endl;
+#endif
 
-        delete bl_layer;
+            std::fill(mat[0], mat[nu*nx*ny], 0.0);
+            mat.copyHostToDevice();
+
+            bilinear_matrix_generate<<<ngrid, nblock>>>(mat(0), geo->nxyz, geo->dxyz, geo->nuv.x,
+                                                        make_double3(*geo->srcs[p*3], *geo->srcs[p*3+1], *geo->srcs[p*3+2]),
+                                                        make_double3(*geo->puvs[p*3], *geo->puvs[p*3+1], *geo->puvs[p*3+2]),
+                                                        make_double3(*geo->dtvs[p*3], *geo->dtvs[p*3+1], *geo->dtvs[p*3+2]));
+            mat.copyDeviceToHost();
+
+            for(int u=0; u<nu; ++u) {
+                for(int i=0; i<nx; ++i) {
+                    for(int j=0; j<ny; ++j) {
+                        if(*mat[u*nx*ny + i*ny + j] != 0){
+                            if(idx == buffer_size)
+                                assert(0);
+
+                            spmat[3*idx] = p*nu + u;
+                            spmat[3*idx+1] = i*ny + j;
+                            spmat[3*idx+2] = *mat[u*nx*ny + i*ny + j];
+                            ++idx;
+                        }
+                    }
+                }
+            }
+        }
+
         delete geo;
+
+        return idx;
     }
 }

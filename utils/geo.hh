@@ -6,7 +6,7 @@
 #include "matrix.hh"
 #include "matrix_double.hh"
 
-#define PI 3.141592653589793f
+#define PI 3.14159265358979323846
 
 class GeoData {
 public:
