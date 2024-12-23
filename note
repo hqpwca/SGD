@@ -1,0 +1,23 @@
+factor = 3*a / (3*a-b)
+factors = 3 / ((3*a-b)*b)
+
+k1 = 1 / (2*a*b*b*(3*a - b))
+
+a <= x < a+b                Conv1 = k1 * [(a+b-x)^3]
+
+a > 2b:
+
+    a-b < x <= a            Conv2 = k1 * [x^3] - k1 * 3*(a-b) * [x^2] + k1 * 3*(a^2-2*a*b-b^2) * [x] + k1 * (3*a^2*b - a^3 + b^3 + 3*a*b^2)
+
+      b < x <= a-b          Conv3 = 3*(a-x) / (3*a*a - a*b)
+
+      0 < x <= b            Conv4 = k1 * 2 * [x^3] - k1 * 6 * b * [x^2] + 1 / a
+
+
+a <= 2b:
+
+      b < x <= a            Conv5 = Conv2
+
+    a-b < x <= b            Conv6 = k1 * 3 * [x^3] - k1 * 3*(a+b) * [x^2] + k1 * 3*(a^2-2*a*b+b^2) * [x] + k1 * (3*a^2*b - a^3 - b^3 + 3*a*b^2)
+
+      0 < x <= a-b          Conv7 = Conv4

@@ -7,6 +7,8 @@
 
 class A_Hl{
     int nblock, ngrid;
+    dim3 vblock, vgrid;
+    MatrixD *vecs;
 public:
     GeoData *geodata;
 

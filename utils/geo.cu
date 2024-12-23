@@ -36,27 +36,26 @@ void invert3(double *m)
     double det = m[0]*((m[4]*m[8]) - (m[5]*m[7])) - m[1]*((m[3]*m[8]) - (m[5]*m[6])) + m[2]*((m[3]*m[7]) - (m[4]*m[6]));
 
     // prevent this from blowing up at multiples of 45 degrees
-    if ((float) det == 0) {
-
-        det = 1e-6;
-
+    if (fabs(det) < 1e-10) {
+        n[0] = 1, n[4] = 1, n[8] = 1;
     }
-
-    n[0] =    ((m[4]*m[8]) - (m[5]*m[7]))/det;
-    n[1] = -1*((m[1]*m[8]) - (m[2]*m[7]))/det;
-    n[2] =    ((m[1]*m[5]) - (m[2]*m[4]))/det;
-    n[3] = -1*((m[3]*m[8]) - (m[5]*m[6]))/det;
-    n[4] =    ((m[0]*m[8]) - (m[2]*m[6]))/det;
-    n[5] = -1*((m[0]*m[5]) - (m[2]*m[3]))/det;
-    n[6] =    ((m[3]*m[7]) - (m[4]*m[6]))/det;
-    n[7] = -1*((m[0]*m[7]) - (m[1]*m[6]))/det;
-    n[8] =    ((m[0]*m[4]) - (m[1]*m[3]))/det;
+    else {
+        n[0] =    ((m[4]*m[8]) - (m[5]*m[7]))/det;
+        n[1] = -1*((m[1]*m[8]) - (m[2]*m[7]))/det;
+        n[2] =    ((m[1]*m[5]) - (m[2]*m[4]))/det;
+        n[3] = -1*((m[3]*m[8]) - (m[5]*m[6]))/det;
+        n[4] =    ((m[0]*m[8]) - (m[2]*m[6]))/det;
+        n[5] = -1*((m[0]*m[5]) - (m[2]*m[3]))/det;
+        n[6] =    ((m[3]*m[7]) - (m[4]*m[6]))/det;
+        n[7] = -1*((m[0]*m[7]) - (m[1]*m[6]))/det;
+        n[8] =    ((m[0]*m[4]) - (m[1]*m[3]))/det;
+    }
 
     // copy
     for (i=0;i<9;i++) m[i] = n[i];
 }
 
-__host__ void generate_projection_matrix(double *pm, double *pmi, const double *src, const double *dtv, const double *puv, const double *pvv, const double uc, const double vc, const int3 n3xyz, const double3 d3xyz) {
+__host__ void generate_projection_matrix(double *pm, float *pmi, const double *src, const double *dtv, const double *puv, const double *pvv, const double uc, const double vc, const int3 n3xyz, const double3 d3xyz) {
     double vec[3];
     double k;
     double norm[3];
@@ -66,7 +65,7 @@ __host__ void generate_projection_matrix(double *pm, double *pmi, const double *
     norm[1] = puv[2]*pvv[0] - puv[0]*pvv[2];
     norm[2] = puv[0]*pvv[1] - puv[1]*pvv[0];
 
-    //std::cout << norm[0] << ' ' << norm[1] << ' ' << norm[2] << std::endl << std::endl;
+    // std::cout << norm[0] << ' ' << norm[1] << ' ' << norm[2] << std::endl << std::endl;
 
     k = 0.0f;
     for (i=0;i<3;i++) k += norm[i]*(dtv[i]-src[i]);
@@ -120,9 +119,13 @@ __host__ void generate_projection_matrix(double *pm, double *pmi, const double *
     double align[] = {
         puv[0],pvv[0],1,
         puv[1],pvv[1],1,
-        puv[2],pvv[2],1};  
+        puv[2],pvv[2],1};
+    
+    // printf("align   :(%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf)\n", align[0], align[1], align[2], align[3], align[4], align[5], align[6], align[7], align[8]);
 
     invert3(align);
+
+    // printf("align^-1:(%lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf, %lf)\n", align[0], align[1], align[2], align[3], align[4], align[5], align[6], align[7], align[8]);
 
     multm(align,pm4,3,3,4); // (x, y, z) vector to (u, v) pixel
 
@@ -211,6 +214,32 @@ void GeoData::geo_init_example(double lsd, double lso,  double start_angle, doub
 
     for(int i = 0; i < np; ++i) {
         double beta = start_angle + i * dangle;
+
+        rotate(src, srcs[i*3], beta);
+        rotate(dtv, dtvs[i*3], beta);
+        rotate(puv, puvs[i*3], beta);
+        rotate(pvv, pvvs[i*3], beta);
+
+        *lsds[i] = lsd;
+        *lsos[i] = lso;
+        *ucs[i] = double(nuv.x) / 2.0;
+        *vcs[i] = double(nuv.y) / 2.0;
+    }
+}
+
+void GeoData::geo_init_angles(double lsd, double lso, double *angles) {
+
+    double src[3] = {-lso, 0.0f, 0.0f};
+    double dtv[3] = {lsd-lso, 0.0f, 0.0f};
+    double puv[3] = {0.0f, duv.x, 0.0f};
+    double pvv[3] = {0.0f, 0.0f, duv.y};
+
+    for(int i = 0; i < np; ++i) {
+        long double beta = angles[i];
+        if(abs(sin(beta) - cos(beta)) < 1e-7)
+            beta = (sin(beta)>0)?PI/4:-PI*3/4;
+        else if (abs(sin(beta) + cos(beta)) < 1e-7)
+            beta = (sin(beta)>0)?PI*3/4:-PI/4;
 
         rotate(src, srcs[i*3], beta);
         rotate(dtv, dtvs[i*3], beta);

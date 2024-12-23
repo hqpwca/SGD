@@ -22,6 +22,8 @@ add_library(network SHARED
     layers/A_B0.hh
     layers/A_B1.cu
     layers/A_B1.hh
+    layers/A_SF.cu
+    layers/A_SF.hh
     layers/A_H0.cu
     layers/A_H0.hh
     layers/A_Hl.cu
@@ -48,7 +50,7 @@ target_compile_features(network PUBLIC cxx_std_14)
 set_target_properties( network
                         PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(network PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
+target_compile_options(network PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3 -lineinfo>)
 target_link_libraries(network PRIVATE -lcublas -fopenmp)
 
 # add_executable(SGD SGD.cu)
@@ -59,10 +61,10 @@ target_link_libraries(network PRIVATE -lcublas -fopenmp)
 # target_compile_options(SGD PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
 # target_link_libraries(SGD PRIVATE network -lcublas -fopenmp)
 
-add_executable(Bilinear Bilinear.cu)
+add_executable(Test Test.cu)
 
-set_property(TARGET Bilinear 
+set_property(TARGET Test 
             PROPERTY CUDA_SEPARABLE_COMPILATION ON)
 
-target_compile_options(Bilinear PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
-target_link_libraries(Bilinear PRIVATE network -lcublas -fopenmp)
+target_compile_options(Test PRIVATE -fopenmp $<$<COMPILE_LANGUAGE:CUDA>:-O3 -lineinfo>)
+target_link_libraries(Test PRIVATE network -lcublas -fopenmp)

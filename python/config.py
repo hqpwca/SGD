@@ -16,8 +16,8 @@ dt = 1.1
 # Test for high resolution
 nx = 256
 ny = 256
-dx = 0.390625
-dy = 0.390625
+dx = 25.0/64
+dy = 25.0/64
 
 nl = 475
 nc = 137
@@ -26,3 +26,16 @@ dt = 0.43
 H0_nl = 271
 H0_nc = 235
 H0_dt = 0.25
+
+# Test for higher resolution
+nx = 512
+ny = 512
+dx = 25.0/128
+dy = 25.0/128
+
+# new sinogram
+nnp = 720
+nu = 855
+lsd = 312.5
+lso = 156.25
+du = 25/64

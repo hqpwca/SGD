@@ -10,6 +10,8 @@
 #include "Ref_projector.hh"
 #include "../utils/exception.hh"
 
+#define ZSIZE 1
+
 template <class T>
 __device__ static void sort2(T* a, T* b)
 {
@@ -214,7 +216,7 @@ __host__ void simpson_layer(T result, short mdepth, const double3 &src, const do
 
 template <class T>
 __host__ void Ref_project_Simpson(
-                            T proj, const float *vol, int3 n3xyz, double3 d3xyz, const double *pm, 
+                            T proj, const float *vol, int3 n3xyz, double3 d3xyz, const float *pm, 
                             int nu, int nv, double3 uv, double3 vv, double3 src, double3 dtv, 
                             double rect_rect_factor, int z_size)
 {
@@ -794,7 +796,7 @@ void Ref::project(Matrix &vol, Matrix &proj, double weight) { // data processing
                                        make_float3(*geodata->pvvs[p*3], *geodata->pvvs[p*3+1], *geodata->pvvs[p*3+2]),
                                        make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                        make_float3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]),
-                                       factor, Z_SIZE);
+                                       factor, ZSIZE);
 
         cudaDeviceSynchronize();
         proj.copyDeviceToHost();
@@ -804,7 +806,7 @@ void Ref::project(Matrix &vol, Matrix &proj, double weight) { // data processing
                                        make_double3(*geodata->pvvs[p*3], *geodata->pvvs[p*3+1], *geodata->pvvs[p*3+2]),
                                        make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                        make_double3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]),
-                                       factor, Z_SIZE);
+                                       factor, ZSIZE);
 #endif
     }
 }
@@ -823,7 +825,7 @@ void Ref::project(Matrix &vol, MatrixD &proj, double weight) { // data processin
                                        make_float3(*geodata->pvvs[p*3], *geodata->pvvs[p*3+1], *geodata->pvvs[p*3+2]),
                                        make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                        make_float3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]),
-                                       factor, Z_SIZE);
+                                       factor, ZSIZE);
 
         cudaDeviceSynchronize();
         proj.copyDeviceToHost();
@@ -833,7 +835,7 @@ void Ref::project(Matrix &vol, MatrixD &proj, double weight) { // data processin
                                        make_double3(*geodata->pvvs[p*3], *geodata->pvvs[p*3+1], *geodata->pvvs[p*3+2]),
                                        make_double3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                        make_double3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]),
-                                       factor, Z_SIZE);
+                                       factor, ZSIZE);
 #endif
     }
 }

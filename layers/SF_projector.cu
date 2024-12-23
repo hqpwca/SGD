@@ -83,7 +83,7 @@ __device__ static void gamma_calculate(float s1, float s2, float *us, float *gam
 // block_size: (8, 8, 64) ILP on z-axis.
 
 template <class T>
-__global__ void SF_project(T proj, const float *vol, int3 n3xyz, double3 d3xyz, const double *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size, bool trap_v = false)
+__global__ void SF_project(T proj, const float *vol, int3 n3xyz, double3 d3xyz, const float *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size, bool trap_v = false)
 {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -239,7 +239,7 @@ __global__ void SF_project(T proj, const float *vol, int3 n3xyz, double3 d3xyz, 
 
 // block_size: (8, 8, 64) ILP on z-axis.
 template <class T>
-__global__ void SF_backproject(T proj, float *vol, int3 n3xyz, double3 d3xyz, const double *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size)
+__global__ void SF_backproject(T proj, float *vol, int3 n3xyz, double3 d3xyz, const float *pm, int nu, int nv, double3 src, double rect_rect_factor, int z_size)
 {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;

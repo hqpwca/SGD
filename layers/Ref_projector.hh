@@ -1,7 +1,5 @@
 #pragma once
 
-#define Z_SIZE 1
-
 #include <cuda_runtime.h>
 #include "layer.hh"
 #include "../utils/matrix.hh"

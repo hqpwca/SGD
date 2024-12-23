@@ -48,7 +48,16 @@ def _analytical_forbild_phantom(resolution, ear):
          [0, 0, 9.0, 11.4, 0, 0.750, 3],  # 16a
          [0, y016b, a16b, b16b, 0, 0.750, 1],  # 16b
          [0, 0, 9.0, 11.4, 0, -0.750, ear],  # 6
-         [9.1, 0, 4.2, 1.8, 0, 0.750, 1]]  # R_ear
+         [9.1, 0, 4.2, 1.8, 0, 0.750, 1], # R_ear
+         [-3, 0, 3, 3, 0, 0.8, 4],
+         [-4, 0, 3, 3, 0, 0.8, 4],
+         [-5, 0, 3, 3, 0, 0.8, 4],
+         [-4, -6, 3, 3, 0, 0.8, 4],
+         [-4, -6, 3, 3, 0, 0.8, 4],
+         [-4, -6, 3, 3, 0, 0.8, 4],
+         [-4, -6, 3, 3, 0, 0.8, 4],
+         [-4, -6, 3, 3, 0, 0.8, 4],
+         [-4, -6, 3, 3, 0, 0.8, 4]]  
     E = np.array(E)
 
     # generate the air cavities in the right ear
@@ -74,7 +83,7 @@ def _analytical_forbild_phantom(resolution, ear):
 
     x0 = -7.0
     y0 = -1.0
-    d0_xy = 0.04 * r
+    d0_xy = 0.04*r
 
     d_xy = [0.0357*r, 0.0312*r, 0.0278*r, 0.0250*r]
     ab = 0.5 * np.ones([5, 1]) * d_xy
@@ -97,10 +106,29 @@ def _analytical_forbild_phantom(resolution, ear):
                      y00 + 24 * d0_xy, y00 + 36 * d0_xy])
 
     leftear = np.hstack([x00, y00, leftear4_7])
+
     C = [[1.2, 1.2, 0.27884, 0.27884, 0.60687, 0.60687, 0.2,
-          0.2, -2.605, -2.605, -10.71177, y016b + 10.71177, 8.88740, -0.21260],
+          0.2, -2.605, -2.605, -10.71177, y016b + 10.71177, 8.88740, -0.21260, 
+          0.1, 0.1, 2, 2, 
+          0.1, 0.1, 2, 2, 
+          0.1, 0.1, 2, 2,
+          0.1, 0.1, 2, 2, 
+          0.1/2*np.sqrt(3), 0.1/2*np.sqrt(3), 2, 2, 
+          0.1/2, 0.1/2, 2, 2,
+          0.1, 0.1, 2, 2, 
+          0.1/2*np.sqrt(3), 0.1/2*np.sqrt(3), 2, 2, 
+          0.1/2, 0.1/2, 2, 2],
          [0, 180, 90, 270, 90, 270, 0,
-          180, 15, 165, 90, 270, 0, 0]]
+          180, 15, 165, 90, 270, 0, 0, 
+          0, 180, 90, 270, 
+          0, 180, 90, 270, 
+          0, 180, 90, 270,
+          0, 180, 90, 270,
+          0+30, 180+30, 90+30, 270+30,
+          0+60, 180+60, 90+60, 270+60,
+          0+90, 180+90, 90+90, 270+90,
+          0+120, 180+120, 90+120, 270+120,
+          0+150, 180+150, 90+150, 270+150,]]
     C = np.array(C)
 
     if not resolution and not ear:
@@ -127,7 +155,7 @@ def _analytical_forbild_phantom(resolution, ear):
         nclip = p[6]
 
         DQ = np.array([np.cos(phi) / a, np.sin(phi) / a, -np.sin(phi) / b, np.cos(phi) / b])
-        
+
         p1 = np.array([x0, y0, a, b, p[4], f, nclip])
         pl = np.append(p1, DQ)
 
@@ -150,7 +178,7 @@ def _analytical_forbild_phantom(resolution, ear):
 
     return phantomE, phantomC
 
-phantomE, phantomC = _analytical_forbild_phantom(True, True)
+phantomE, phantomC = _analytical_forbild_phantom(False, True)
 
 def discrete_phantom(xcoord, ycoord):
     image = np.zeros(xcoord.shape)
@@ -181,7 +209,7 @@ def discrete_phantom(xcoord, ycoord):
 
     return image
 
-@njit
+# @njit
 def batch_line_integral(thetas, scoord):
     sinth = np.sin(thetas)
     costh = np.cos(thetas)
@@ -214,7 +242,7 @@ def batch_line_integral(thetas, scoord):
         s0 = np.array([sx-x0, sy-y0])
 
         DQ = np.array([[p[7], p[8]], [p[9], p[10]]])
-        
+
         DQthp = DQ @ np.array([-sinth, costh])
         DQs0 = DQ @ s0
 
@@ -224,11 +252,11 @@ def batch_line_integral(thetas, scoord):
 
         equation = B**2 - 4 * A * C
         i = np.nonzero(equation > 0)
-        
+
         tp = 0.5 * (-B[i] + np.sqrt(equation[i])) / A[i]
         tq = 0.5 * (-B[i] - np.sqrt(equation[i])) / A[i]
 
-        for j in range(nclip):
+        for j in range(int(nclip)):
             d = phantomC[0, nc]
             xp = sx[i] - tp * sinth[i]
             yp = sy[i] + tp * costh[i]
@@ -236,12 +264,13 @@ def batch_line_integral(thetas, scoord):
             yq = sy[i] + tq * costh[i]
             tz = d - phantomC[2, nc] * s0[0, i] - phantomC[3, nc] * s0[1, i]
             tz = tz / (-sinth[i] * phantomC[2, nc] + costh[i] * phantomC[3, nc])
+            tz = tz.ravel()
             equation2 = (xp - x0) * phantomC[2, nc] + (yp - y0) * phantomC[3, nc]
             equation3 = (xq - x0) * phantomC[2, nc] + (yq - y0) * phantomC[3, nc]
-            m1 = np.nonzero(equation3 >= d)
-            tq[m1] = tz[m1]
-            m2 = np.nonzero(equation2 >= d)
-            tp[m2] = tz[m2]
+            m1 = np.nonzero(equation2 >= d)
+            tp[m1] = tz[m1]
+            m2 = np.nonzero(equation3 >= d)
+            tq[m2] = tz[m2]
             nc += 1
 
         sinok = f * np.abs(tp - tq)
@@ -263,7 +292,7 @@ def forbild_line_integral(theta, scoord):
         if tmp < eps: mask = eps
 
     theta += mask
-    
+
     sino = 0.0
     sinth = np.sin(theta)
     costh = np.cos(theta)
@@ -279,13 +308,13 @@ def forbild_line_integral(theta, scoord):
         a = p[2]
         b = p[3]
         phi = p[4]*np.pi/180
-        f = p[5] / 10
+        f = p[5]
         nclip = p[6]
 
         s0 = np.array([sx-x0, sy-y0])
 
         DQ = np.array([[p[7], p[8]], [p[9], p[10]]])
-        
+
         DQthp = DQ @ np.array([-sinth, costh])
         DQs0 = DQ @ s0
 
@@ -297,7 +326,7 @@ def forbild_line_integral(theta, scoord):
         if equation < 0:
             nc += int(nclip)
             continue
-        
+
         tp = 0.5 * (-B + np.sqrt(equation)) / A
         tq = 0.5 * (-B - np.sqrt(equation)) / A
 
@@ -322,6 +351,40 @@ def forbild_line_integral(theta, scoord):
         sino += sinok
 
     return sino
+
+def calc_poisson_noise(x, N0):
+    noise = np.random.poisson(lam = N0 * np.exp(-x/100.0))
+    return noise
+
+def forbild_sinogram_noise(nnp, nu, du, lsd, lso):
+    sino = np.zeros((nnp, nu), dtype=np.float64)
+
+    angles = np.linspace(0, 2*np.pi, num=nnp, endpoint=False)
+    for p in range(nnp):
+        for iu in range(nu):
+            su = - (nu*du) / 2 + iu*du
+
+            samples, step = np.linspace(su, su+du, 200, endpoint=False, retstep=True)
+            samples += step / 2
+
+            theta = angles[p] + np.pi/2 + np.arctan2(samples, lsd)
+            scoord = samples * lso / np.sqrt(lsd**2 + samples**2)
+
+            # samples = np.vectorize(forbild_line_integral)(theta, scoord)
+            samples = batch_line_integral(theta, scoord)
+            # if not np.allclose(samples, samples2):
+            #     print(p, iu)
+            #     print(samples)
+            #     print(samples2)
+            #     assert False
+
+            samples = calc_poisson_noise(samples, 100.0)
+
+            sino[p][iu] = 100.0 * np.log(20000.0 / np.sum(samples))
+        print(p, flush=True)
+
+    return sino
+
 
 c_sig = nb.types.double(nb.types.int32, nb.types.CPointer(nb.types.double))
 
@@ -361,31 +424,9 @@ def forbild_sinogram(nnp, nu, du, lsd, lso, beers_law = False):
                 sino[p][iu] = np.log(quad(LowLevelCallable(forbild_line_quad_beerslaw.ctypes), 0, 1, args=(su, du, lso, lsd, angles[p]))[0])
             else:
                 sino[p][iu] = quad(LowLevelCallable(forbild_line_quad.ctypes), 0, 1, args=(su, du, lso, lsd, angles[p]))[0]
-            print(p, iu, sino[p][iu], flush=True)
-    
+        print(p, flush=True)
+
     return sino
-
-def forbild_sinogram_noquad(nnp, nu, du, lsd, lso, num_sample = 1, beers_law = False):
-    sino = np.zeros((nnp, nu), dtype=np.float64)
-
-    angles = np.linspace(0, 2*np.pi, num=nnp, endpoint=False, dtype=np.float64)
-    u = (np.arange(nu*num_sample) * du / num_sample)
-    uc = np.ones((nnp, 1)) * u
-    anglesc = angles[:, None] * np.ones((1, nu))
-    scoords = lso * uc / np.sqrt(lsd**2 + uc**2)
-    theta = anglesc + np.pi / 2 + np.arctan(uc / lsd)
-
-
-            # su = - (nu*du) / 2 + iu*du
-            # if beers_law:
-            #     sino[p][iu] = forbild_line_quad_beerslaw(0.5, su, du, lso, lsd, angles[p])
-            # else:
-            #     sino[p][iu] = forbild_line_quad(0.5, su, du, lso, lsd, angles[p])
-            # print(p, iu, sino[p][iu], flush=True)
-    
-    return sino
-
-
 
 if __name__ == "__main__":
     nx = 100
