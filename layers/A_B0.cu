@@ -491,9 +491,9 @@ extern "C" {
         return idx;
     }
 
-    A_B0 *b0_init(int nx, int ny, int np, int nu, double dx, double dy, double du, double lsd, double lso, double *angles){
+    A_B0 *b0_init(int nx, int ny, int np, int nu, double dx, double dy, double du, double lsd, double lso, double *angles, double *dz, double *drho){
         GeoData *geo = new GeoData(nx, ny, 1, nu, 1, np, dx, dy, 1, du, 1);
-        geo->geo_init_angles(lsd, lso, angles);
+        geo->geo_init_angles(lsd, lso, angles, dz, drho);
         geo->initialize_projection_matrix();
 
         A_B0 *b0_layer = new A_B0(geo);

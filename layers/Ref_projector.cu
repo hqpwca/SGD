@@ -309,7 +309,7 @@ __host__ void Ref_project_Simpson(
         min_v = ceilf(vmin - 0.5f);
         max_v = ceilf(vmax - 0.5f);
 
-        printf("%d %d %d: %f %f %f %f\n", ix, iy, iz, min_u, max_u, min_v, max_v);
+        // printf("%d %d %d: %f %f %f %f\n", ix, iy, iz, min_u, max_u, min_v, max_v);
         
         if ( ( max_u < 0 ) || ( min_u >= nu ) ) continue;
         if ( ( max_v < 0 ) || ( min_v >= nv ) ) continue;
@@ -741,7 +741,7 @@ __global__ void Ref_project_Simpson(
             for (int tj = 0; tj < max_v - min_v + 1; ++tj) {
                 int j = tj + min_v;
 
-                printf("%d %d\n", i, j);
+                // printf("%d %d\n", i, j);
 
                 float px = dtv.x - (nu*uv.x)/2 - (nv*vv.x)/2 + i*uv.x + j*vv.x;
                 float py = dtv.y - (nu*uv.y)/2 - (nv*vv.y)/2 + i*uv.y + j*vv.y;
@@ -784,11 +784,11 @@ __global__ void Ref_project_Simpson(
 
 void Ref::project(Matrix &vol, Matrix &proj, double weight) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
-        //if(p != 0 && p != 15 && p != 35 && p != 45) continue;
+        if(p != 0 && p != 15 && p != 35 && p != 45) continue;
 
         float lsd = *geodata->lsds[p];
         double factor = 1.0;
-        std::cout << p << std::endl;
+        // std::cout << p << std::endl;
 
 #ifndef REF_CPU
         Ref_project<float *> <<<vgrid, vblock>>>(proj(p * geodata->nuv.x * geodata->nuv.y), vol(0), geodata->nxyz, geodata->dxyz, geodata->pmis(p*12), geodata->nuv.x, geodata->nuv.y,
@@ -813,7 +813,7 @@ void Ref::project(Matrix &vol, Matrix &proj, double weight) { // data processing
 
 void Ref::project(Matrix &vol, MatrixD &proj, double weight) { // data processing on device
     for(int p=0; p<geodata->np; p++) {
-        //if(p != 0 && p != 15 && p != 35 && p != 45) continue;
+        if(p != 0 && p != 15 && p != 35 && p != 45) continue;
 
         float lsd = *geodata->lsds[p];
         double factor = 1.0;

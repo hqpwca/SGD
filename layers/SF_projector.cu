@@ -46,9 +46,7 @@ __device__ static void gamma_calculate(float s1, float s2, float *us, float *gam
     b2 = fminf(s2, us[1]);
 
     if(b2 > b1){
-        float _a = b1 - us[0];
-        float _b = b2 - b1;
-        tmp =  (_b * _b + 2 * _a * _b) / (2 * (us[1] - us[0]));
+        tmp = (1/(2*(us[1]-us[0]))) * ((b2 - us[0])*(b2 - us[0]) - (b1 - us[0])*(b1 - us[0]));
     }
     else {
         tmp = 0.0f;
@@ -70,9 +68,7 @@ __device__ static void gamma_calculate(float s1, float s2, float *us, float *gam
     b2 = fminf(s2, us[3]);
 
     if(b2 > b1){
-        float _b = b2 - b1;
-        float _c = us[3] - b2;
-        tmp = (_b * _b + 2 * _b * _c) / (2 * (us[3] - us[2]));
+        tmp = (1/(2*(us[3]-us[2]))) * ((b1 - us[3])*(b1 - us[3]) - (b2 - us[3])*(b2 - us[3]));
     }
     else{
         tmp = 0.0f;

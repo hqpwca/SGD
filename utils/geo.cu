@@ -152,6 +152,8 @@ __host__ void generate_projection_matrix(double *pm, float *pmi, const double *s
     oy = (ny-1)*dy/2.0f;
     oz = (nz-1)*dz/2.0f;
 
+    // printf("NXY: %d, %d, %d, DXY: %f, %f, %f, OXY: %f, %f, %f\n", nx,ny,nz, dx, dy, dz, ox, oy, oz);
+
     // scale for multiplication by int indices
     pmi[0] = dx*pm[0]; pmi[1] = dy*pm[1]; pmi[2] = dz*pm[2]; pmi[3] = pm[3] - ox*pm[0] - oy*pm[1] - oz*pm[2];
     pmi[4] = dx*pm[4]; pmi[5] = dy*pm[5]; pmi[6] = dz*pm[6]; pmi[7] = pm[7] - ox*pm[4] - oy*pm[5] - oz*pm[6];
@@ -227,15 +229,28 @@ void GeoData::geo_init_example(double lsd, double lso,  double start_angle, doub
     }
 }
 
-void GeoData::geo_init_angles(double lsd, double lso, double *angles) {
+void GeoData::geo_init_angles(double lsd, double lso, double *angles, double *dz, double *drho) {
 
     double src[3] = {-lso, 0.0f, 0.0f};
     double dtv[3] = {lsd-lso, 0.0f, 0.0f};
     double puv[3] = {0.0f, duv.x, 0.0f};
     double pvv[3] = {0.0f, 0.0f, duv.y};
+    double _src[3] = {-lso, 0.0f, 0.0f};
 
     for(int i = 0; i < np; ++i) {
         long double beta = angles[i];
+        
+        if(dz != nullptr)
+            src[2] = dz[i];
+        else
+            src[2] = 0.0;
+
+        if(drho != nullptr)
+            src[0] = _src[0] + drho[i];
+        else
+            src[0] = _src[0];
+
+
         if(abs(sin(beta) - cos(beta)) < 1e-7)
             beta = (sin(beta)>0)?PI/4:-PI*3/4;
         else if (abs(sin(beta) + cos(beta)) < 1e-7)
@@ -252,3 +267,6 @@ void GeoData::geo_init_angles(double lsd, double lso, double *angles) {
         *vcs[i] = double(nuv.y) / 2.0;
     }
 }
+
+//Helical cylindrical projection, add one projection angle with DICOM-CT-PD geometry
+// void GeoData::geo_add_projection_hc(double *src, double *)

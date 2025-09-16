@@ -53,9 +53,7 @@ __device__ static void gamma_calculate(float s1, float s2, float *us, float *gam
     b2 = fminf(s2, us[1]);
 
     if(b2 > b1){
-        float _a = b1 - us[0];
-        float _b = b2 - b1;
-        tmp =  (_b * _b + 2 * _a * _b) / (2 * (us[1] - us[0]));
+        tmp = (1/(2*(us[1]-us[0]))) * ((b2 - us[0])*(b2 - us[0]) - (b1 - us[0])*(b1 - us[0]));
     }
     else {
         tmp = 0.0f;
@@ -77,20 +75,16 @@ __device__ static void gamma_calculate(float s1, float s2, float *us, float *gam
     b2 = fminf(s2, us[3]);
 
     if(b2 > b1){
-        float _b = b2 - b1;
-        float _c = us[3] - b2;
-        tmp = (_b * _b + 2 * _b * _c) / (2 * (us[3] - us[2]));
+        tmp = (1/(2*(us[3]-us[2]))) * ((b1 - us[3])*(b1 - us[3]) - (b2 - us[3])*(b2 - us[3]));
     }
     else{
         tmp = 0.0f;
     }
-    if(tmp == tmp) gamma[0] += tmp ;
-    
-    gamma[0] *= (2.0f / ( ((us[3]-us[0])+(us[2]-us[1])) ));
+    if(tmp == tmp) gamma[0] += tmp;
 }
 
 // Fan Beam only
-__global__ static void SF_forward_projection(double *proj, const double *vol, const float *pm, int3 n3xyz, float3 d3xyz, int nu, float3 src, float3 puv, float3 dtv, float lsd, int z_size, int np, int ip) {
+__global__ static void SF_forward_projection(double *proj, const double *vol, const float *pm, int3 n3xyz, float3 d3xyz, int nu, float du, float3 src, float3 puv, float3 dtv, float lsd, int z_size, int np, int ip) {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     // int blocky = (blockIdx.y * blockDim.y) + threadIdx.y;
     int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -100,9 +94,11 @@ __global__ static void SF_forward_projection(double *proj, const double *vol, co
     // y_end = min(y_end, n3xyz.y);
 
     if(ix >= n3xyz.x) return;
+    if(iy >= n3xyz.y) return;
     // if(y_end <= y_start) return;
 
     int nx = n3xyz.x, ny = n3xyz.y;
+    float nx2 = (nx - 1) / 2.0f, ny2 = (ny - 1) / 2.0f;
     float dx = d3xyz.x, dy = d3xyz.y;
     int maxu, minu;
     int idx, idxu;
@@ -174,7 +170,21 @@ __global__ static void SF_forward_projection(double *proj, const double *vol, co
 
         val = 0;
 
-        float weight = rsqrtf( (d3xyz.x*(ix - nx/2)-src.x)*(d3xyz.x*(ix - nx/2)-src.x) + (d3xyz.y*(iy - ny/2)-src.y)*(d3xyz.y*(iy - ny/2)-src.y)) * lsd;
+        // float weight = rsqrtf( (d3xyz.x*(ix - nx2)-src.x)*(d3xyz.x*(ix - nx2)-src.x) + (d3xyz.y*(iy - ny2)-src.y)*(d3xyz.y*(iy - ny2)-src.y)) * lsd * dx * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) / du;
+        float theta = atan2((d3xyz.x*(ix - nx2)-src.x), (d3xyz.y*(iy - ny2)-src.y));
+        float sin_theta = fabs(sin(theta));
+        float cos_theta = fabs(cos(theta));
+        float weight = dx / fmaxf(sin_theta, cos_theta);
+
+#ifdef DEBUG
+        if (idx == 0)
+            printf("[IDX %d] Weights: (%f, %f, %f) -> %f, %f, %f\n", idx, (d3xyz.x*(ix - nx2)-src.x), 
+                                                                          (d3xyz.y*(iy - ny2)-src.y),
+                                                                          lsd, 
+                                                                          lsd * rsqrtf( (d3xyz.x*(ix - nx2)-src.x)*(d3xyz.x*(ix - nx2)-src.x) + (d3xyz.y*(iy - ny2)-src.y)*(d3xyz.y*(iy - ny2)-src.y)), 
+                                                                          (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )), 
+                                                                          weight);
+#endif
 
         for (int ti = 0; ti < maxu - minu + 1; ++ ti) {
             idxu = (minu + ti) * np + ip;
@@ -198,19 +208,24 @@ __global__ static void SF_forward_projection(double *proj, const double *vol, co
 
             gamma_calculate(minu + ti, minu + ti + 1.0f, us, &gamma);
 
-            val = weight * gamma * C * dx * dy;
+            val = weight * gamma * C;
             // if (idx == 4)
-            //     printf("idx: %d, O:(%d, %d) = %f, Us: [%f, %f, %f, %f], U_Index: %d, Gamma: %f\n", idx, ix, iy, vol[idx], us[0], us[1], us[2], us[3], minu + ti, gamma);
             
-            if(idxu < np * nu && idxu >= 0 && val == val && gamma > eps)
+            if(idxu < np * nu && idxu >= 0 && val == val && gamma > eps){
                 atomicAdd(proj+idxu, val);
+
+#ifdef DEBUG
+                if (idx == 0)
+                    printf("\tidx: %d, O:(%d, %d) = %f, Us: [%f, %f, %f, %f], U_Index: %d, Gamma: %f, Val: %f\n", idx, ix, iy, vol[idx], us[0], us[1], us[2], us[3], minu + ti, gamma, val);
+#endif
+            }
                 // proj[idxu] += val;
         }
     // }
 }
 
 
-__global__ static void SF_backward_projection(const double *proj, double *vol, const float *pm, int3 n3xyz, float3 d3xyz, int nu, float3 src, float3 puv, float3 dtv, float lsd, int z_size) {
+__global__ static void SF_backward_projection(const double *proj, double *vol, const float *pm, int3 n3xyz, float3 d3xyz, int nu, float du, float3 src, float3 puv, float3 dtv, float lsd, int z_size) {
     int ix = (blockIdx.x * blockDim.x) + threadIdx.x;
     int blocky = (blockIdx.y * blockDim.y) + threadIdx.y;
     // int iy = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -223,6 +238,7 @@ __global__ static void SF_backward_projection(const double *proj, double *vol, c
     if(y_end <= y_start) return;
 
     int nx = n3xyz.x, ny = n3xyz.y;
+    float nx2 = (nx - 1) / 2.0f, ny2 = (ny - 1) / 2.0f;
     float dx = d3xyz.x, dy = d3xyz.y;
     int maxu, minu;
     int idx, idxu;
@@ -289,9 +305,16 @@ __global__ static void SF_backward_projection(const double *proj, double *vol, c
         minu = min(max(0, (int)floorf(us[0])), nu-1);
         maxu = min(max(0, (int)floorf(us[3])), nu-1);
 
-        float weight = rsqrtf( (d3xyz.x*(ix - nx/2)-src.x)*(d3xyz.x*(ix - nx/2)-src.x) + (d3xyz.y*(iy - ny/2)-src.y)*(d3xyz.y*(iy - ny/2)-src.y)) * lsd;
-
         // printf("\tidx: %d, O:(%d(%f), %d(%f)) = %f, Us: [%f, %f, %f, %f], Ur: [%d~%d]\n", idx, ix, ox, iy, oy, vol[idx], us[0], us[1], us[2], us[3], int(minu), int(maxu));
+
+        val = 0;
+
+        // float weight = rsqrtf( (d3xyz.x*(ix - nx2)-src.x)*(d3xyz.x*(ix - nx2)-src.x) + (d3xyz.y*(iy - ny2)-src.y)*(d3xyz.y*(iy - ny2)-src.y)) * lsd * dx * (2 / ( ((us[3]-us[0])+(us[2]-us[1])) )) / du;
+        float theta = atan2((d3xyz.x*(ix - nx2)-src.x), (d3xyz.y*(iy - ny2)-src.y));
+        float sin_theta = fabs(sin(theta));
+        float cos_theta = fabs(cos(theta));
+        float weight = dx / fmaxf(sin_theta, cos_theta);
+        // printf("\tidx: %d = %f, Us: [%f, %f, %f, %f], Ur: [%d~%d]\n", idx, vol[idx], us[0], us[1], us[2], us[3], int(minu), int(maxu));
 
         val = 0;
 
@@ -303,7 +326,7 @@ __global__ static void SF_backward_projection(const double *proj, double *vol, c
             gamma_calculate(idxu, idxu + 1.0f, us, &gamma);
 
             if(idxu < nu && idxu >= 0 && gamma == gamma && gamma > eps)
-                val += weight * gamma * proj[idxu] * dx * dy;
+                val += weight * gamma * proj[idxu];
         }
 
         atomicAdd(vol+idx, val);
@@ -333,6 +356,7 @@ A_SF::A_SF(GeoData *geo)
 
 A_SF::~A_SF()
 {
+
 }
 
 void A_SF::project(MatrixD &vol, MatrixD &proj, double weight)
@@ -340,10 +364,11 @@ void A_SF::project(MatrixD &vol, MatrixD &proj, double weight)
     for(int p=0; p<geodata->np; p++){
 
 #ifdef DEBUG
+        cudaDeviceSynchronize();
         std::cout << p << std::endl;
 #endif
         SF_forward_projection<<<vgrid_z, vblock>>>(proj(0), vol(0), geodata->pmis(p*12), geodata->nxyz, 
-                                                        make_float3(geodata->dxyz.x, geodata->dxyz.y, geodata->dxyz.z), geodata->nuv.x,
+                                                        make_float3(geodata->dxyz.x, geodata->dxyz.y, geodata->dxyz.z), geodata->nuv.x, geodata->duv.x,
                                                         make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                                         make_float3(*geodata->puvs[p*3], *geodata->puvs[p*3+1], *geodata->puvs[p*3+2]),
                                                         make_float3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]), *geodata->lsds[p], Z_SIZE, geodata->np, p);
@@ -359,7 +384,7 @@ void A_SF::back_project(MatrixD &vol, MatrixD &proj, double weight)
 #endif
 
         SF_backward_projection<<<vgrid, vblock>>>(proj(int(p * geodata->nuv.x)), vol(0), geodata->pmis(p*12), geodata->nxyz, 
-                                                        make_float3(geodata->dxyz.x, geodata->dxyz.y, geodata->dxyz.z), geodata->nuv.x,
+                                                        make_float3(geodata->dxyz.x, geodata->dxyz.y, geodata->dxyz.z), geodata->nuv.x, geodata->duv.x,
                                                         make_float3(*geodata->srcs[p*3], *geodata->srcs[p*3+1], *geodata->srcs[p*3+2]),
                                                         make_float3(*geodata->puvs[p*3], *geodata->puvs[p*3+1], *geodata->puvs[p*3+2]),
                                                         make_float3(*geodata->dtvs[p*3], *geodata->dtvs[p*3+1], *geodata->dtvs[p*3+2]), *geodata->lsds[p], 1);

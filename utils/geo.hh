@@ -33,6 +33,7 @@ public:
     void initialize_projection_matrix();
 
     void geo_init_example(double lsd, double lso, double start_angle, double end_angle);
-    void geo_init_angles(double lsd, double lso, double *angles);
-    
+    void geo_init_angles(double lsd, double lso, double *angles, double *dz = nullptr, double *drho = nullptr);
+
+    void geo_init_helical(double lsd, double lso, double dz, double *angles);
 };

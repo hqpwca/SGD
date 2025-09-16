@@ -20,6 +20,7 @@
 #include "network.hh"
 #include "layers/SF_projector.hh"
 #include "layers/Ref_projector.hh"
+#include "layers/A_B1_3D.hh"
 #include "utils/dataset.hh"
 
 #define BATCH_SIZE 256
@@ -164,22 +165,28 @@ int main(int argc, char *argv[]) {
 
 int main() {
     cudaDeviceSetLimit(cudaLimitStackSize, 12928);
-    GeoData *geo = new GeoData(128, 128, 1, 256, 1, 360, 1, 1, 0, 0.75, 0);
+    GeoData *geo = new GeoData(480, 360, 141, 200, 200, 16, 0.97656, 0.97656, 2, 5, 5);
     //GeoData *geo = new GeoData(100, 100, 100, 500, 500, 360, 0.01, 0.01, 0.01, 0.01, 0.01);
     //GeoData *geo = new GeoData(256, 256, 256, 500, 500, 360, 0.01, 0.01, 0.01, 0.0256, 0.0256);
     //GeoData *geo = new GeoData(400, 400, 160, 520, 264, 256, 0.15, 0.15, 0.15, 0.2, 0.2);
-    geo->geo_init_example(11, 5, 0.0f, PI*2 * 359/360);
+    geo->geo_init_example(3000, 2000, 0.0f, PI*2 * 15/16);
     //geo->geo_init_example(800, 600, 0.0f, PI);
     geo->initialize_projection_matrix();
 
-    SF *sf_layer = new SF(geo);
-    Ref *ref_layer = new Ref(geo);
+    A_B1_3D *b1_layer = new A_B1_3D(geo);
+    // Ref *ref_layer = new Ref(geo);
 
-    Matrix x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
+    MatrixD x(geo->nxyz.z * geo->nxyz.y * geo->nxyz.x, 1);
     x.allocateMemory();
 
     std::fill(x[0], x[geo->nxyz.z * geo->nxyz.y * geo->nxyz.x], 1.0f);
 
+    MatrixD y(geo->np * geo->nuv.x * geo->nuv.y, 1);
+    y.allocateMemory();
+
+    b1_3d_forward_projection(y[0], x[0], b1_layer);
+
+    /*
     // for(int i=0; i<geo->nxyz.z; ++i){ //z
     //     for(int j=0; j<geo->nxyz.y; ++j){ //y
     //         for(int k=0; k<geo->nxyz.x; ++k) { //x
@@ -197,20 +204,17 @@ int main() {
 
     // Add a small empty sphere inside
 
-    /*
-    for(int i=0; i<geo->nxyz.z; ++i){ //z
-        for(int j=0; j<geo->nxyz.y; ++j){ //y
-            for(int k=0; k<geo->nxyz.x; ++k) { //x
-                int idx = i*geo->nxyz.y*geo->nxyz.x + j*geo->nxyz.x + k;
-                double di = i-80, dj = j-80, dk = k-80;
-                if(sqrt(di*di + dj*dj + dk*dk) < 20.0){
-                    *x[idx] = 0.0f;
-                }
-            }
-        }
-    }
-
-    */
+    // for(int i=0; i<geo->nxyz.z; ++i){ //z
+    //     for(int j=0; j<geo->nxyz.y; ++j){ //y
+    //         for(int k=0; k<geo->nxyz.x; ++k) { //x
+    //             int idx = i*geo->nxyz.y*geo->nxyz.x + j*geo->nxyz.x + k;
+    //             double di = i-80, dj = j-80, dk = k-80;
+    //             if(sqrt(di*di + dj*dj + dk*dk) < 20.0){
+    //                 *x[idx] = 0.0f;
+    //             }
+    //         }
+    //     }
+    // }
 
     x.copyHostToDevice();
 
@@ -457,6 +461,7 @@ int main() {
 
     // delete sf_layer;
     delete ref_layer;
+    */
   
     return 0;
 }

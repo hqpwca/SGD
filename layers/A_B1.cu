@@ -69,6 +69,7 @@ __global__ void b1_forward_projection(double *proj, const double *vol, const flo
     // y_end = min(y_end, n3xyz.y);
 
     if(ix >= n3xyz.x) return;
+    if(iy >= n3xyz.y) return;
     // if(y_end <= y_start) return;
 
     int nx = n3xyz.x, ny = n3xyz.y;
@@ -591,9 +592,9 @@ extern "C" {
         return idx;
     }
 
-    A_B1 *b1_init(int nx, int ny, int np, int nu, double dx, double dy, double du, double lsd, double lso, double *angles){
+    A_B1 *b1_init(int nx, int ny, int np, int nu, double dx, double dy, double du, double lsd, double lso, double *angles, double *dz, double *drho) {
         GeoData *geo = new GeoData(nx, ny, 1, nu, 1, np, dx, dy, 1, du, 1);
-        geo->geo_init_angles(lsd, lso, angles);
+        geo->geo_init_angles(lsd, lso, angles, dz, drho);
         geo->initialize_projection_matrix();
 
         A_B1 *b1_layer = new A_B1(geo);
